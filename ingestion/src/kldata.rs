@@ -462,17 +462,17 @@ mod tests {
         ] => Ok(vec![
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
                 value: Scalar(-1.1)
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "CI".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "CI".to_string(), sensor_and_level: None},
                 value: Scalar(0.0)
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "IR".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "IR".to_string(), sensor_and_level: None},
                 value: Scalar(2.8)
             },
         ]);
@@ -487,32 +487,32 @@ mod tests {
         ] => Ok(vec![
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
                 value: Scalar(-1.1)
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "CI".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "CI".to_string(), sensor_and_level: None},
                 value: Scalar(0.0)
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "IR".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "IR".to_string(), sensor_and_level: None},
                 value: Scalar(2.8)
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 51, 0).unwrap(),
-                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
                 value: Scalar(-1.5)
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 51, 0).unwrap(),
-                id: ObsinnId{param_code: "CI".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "CI".to_string(), sensor_and_level: None},
                 value: Scalar(1.0)
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 51, 0).unwrap(),
-                id: ObsinnId{param_code: "IR".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "IR".to_string(), sensor_and_level: None},
                 value: Scalar(2.9)
             },
         ]);
@@ -525,12 +525,12 @@ mod tests {
         ] => Ok(vec![
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                id: ObsinnId{param_code: "KLOBS".to_string(), sensor_and_level: None}, 
-                value: NonScalar("20240910000000") 
+                id: ObsinnId{param_code: "KLOBS".to_string(), sensor_and_level: None},
+                value: NonScalar("20240910000000")
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None}, 
+                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
                 value: Scalar(10.1)
             }]
         );

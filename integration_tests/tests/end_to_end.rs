@@ -275,7 +275,6 @@ async fn test_stations_endpoint_irregular() {
         len: 12,
     }; "Scalar params")
 ]
-// TODO: probably write a separate test, so we can check actual sensor and level
 #[test_case(
     TestData {
         station_id: 20001,
