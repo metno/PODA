@@ -299,6 +299,7 @@ async fn test_stations_endpoint_irregular() {
     }; "Scalar and non-scalar")
 ]
 #[tokio::test]
+// TODO: add test that inserts and retrives multiple timeseries
 async fn test_stations_endpoint_regular(ts: TestData<'_>) {
     e2e_test_wrapper(async {
         let client = reqwest::Client::new();
@@ -321,6 +322,22 @@ async fn test_stations_endpoint_regular(ts: TestData<'_>) {
                 panic!("Expected regular timeseries")
             };
             assert_eq!(series.data.len(), ts.len);
+
+            let header = &series.header;
+
+            assert_eq!(header.param_id, param.id);
+            assert_eq!(header.station_id, ts.station_id);
+
+            match param.sensor_level {
+                Some((sensor, level)) => {
+                    assert_eq!(header.lvl.unwrap(), level);
+                    assert_eq!(header.sensor.unwrap(), sensor);
+                }
+                None => {
+                    assert_eq!(header.lvl, None);
+                    assert_eq!(header.sensor, None);
+                }
+            }
         }
     })
     .await
