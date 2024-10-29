@@ -183,16 +183,6 @@ fn test_timeseries_is_open(station_id: i32, type_id: i32, permit_id: i32) -> boo
     timeseries_is_open(permit_tables, station_id, type_id, permit_id).unwrap()
 }
 
-async fn cleanup(client: &tokio_postgres::Client) {
-    client
-        .batch_execute(
-            // TODO: should clean public.timeseries_id_seq too? RESTART IDENTITY CASCADE?
-            "TRUNCATE public.timeseries, labels.met, labels.obsinn CASCADE",
-        )
-        .await
-        .unwrap();
-}
-
 async fn e2e_test_wrapper<T: Future<Output = ()>>(test: T) {
     let manager = PostgresConnectionManager::new_from_stringlike(CONNECT_STRING, NoTls).unwrap();
     let db_pool = bb8::Pool::builder().build(manager).await.unwrap();
@@ -213,7 +203,13 @@ async fn e2e_test_wrapper<T: Future<Output = ()>>(test: T) {
             #[cfg(not(feature = "debug"))]
             {
                 let client = db_pool.get().await.unwrap();
-                cleanup(&client).await;
+                client
+                    .batch_execute(
+                        // TODO: should clean public.timeseries_id_seq too? RESTART IDENTITY CASCADE?
+                        "TRUNCATE public.timeseries, labels.met, labels.obsinn CASCADE",
+                    )
+                    .await
+                    .unwrap();
             }
             assert!(test_result.is_ok())
         }
