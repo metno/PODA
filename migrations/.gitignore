@@ -1,0 +1,7 @@
+*.txt
+*.sh
+migrate
+tables*/
+test_*/
+.env
+dumps/
