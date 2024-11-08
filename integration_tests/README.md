@@ -20,22 +20,21 @@ End-to-end tests are implemented inside `integration_tests\tests\end_to_end.rs`.
 > defined in the `mock_permit_tables` function, otherwise the ingestor will not be able to
 > insert the data into the database.
 
-If you have Docker installed, you can run the tests locally using the provided
-`Makefile`:
+If you have Docker installed, you can run the tests locally using the provided `justfile`:
 
 ```terminal
 # Run all tests
-make test_all
+just test_all
 
 # Run unit tests only
-make unit_tests
+just test_unit
 
 # Run integration tests only
-make end_to_end
+just test_end_to_end
 
-# Debug a specific test (does not clean up the DB if `my_test_name` is an integration test)
-TEST=my_test_name make debug_test
+# Debug a specific test (does not clean up the DB if `test_name` is an integration test)
+just debug_test test_name
 
 # If any error occurs while running integration tests, you might need to reset the DB container manually
-make clean
+just clean
 ```
