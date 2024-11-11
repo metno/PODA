@@ -16,6 +16,7 @@ func NewBar(size int, description string) *progressbar.ProgressBar {
 		progressbar.OptionSetDescription(description),
 		progressbar.OptionShowCount(),
 		progressbar.OptionSetPredictTime(false),
+		progressbar.OptionSetElapsedTime(true),
 		progressbar.OptionShowElapsedTimeOnFinish(),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "=",
