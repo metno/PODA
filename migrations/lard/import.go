@@ -9,19 +9,29 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func InsertData(data DataInserter, pool *pgxpool.Pool, logStr string) (int64, error) {
-	size := data.Len()
+// TODO: I'm not sure I like the interface solution
+type DataInserter interface {
+	InsertData(i int) ([]any, error)
+	Len() int
+}
+
+type TextInserter interface {
+	InsertText(i int) ([]any, error)
+	Len() int
+}
+
+type FlagInserter interface {
+	InsertFlags(i int) ([]any, error)
+	Len() int
+}
+
+func InsertData(ts DataInserter, pool *pgxpool.Pool, logStr string) (int64, error) {
+	size := ts.Len()
 	count, err := pool.CopyFrom(
 		context.TODO(),
 		pgx.Identifier{"public", "data"},
 		[]string{"timeseries", "obstime", "obsvalue"},
-		pgx.CopyFromSlice(size, func(i int) ([]any, error) {
-			return []any{
-				data.ID(),
-				data.Obstime(i),
-				data.Data(i),
-			}, nil
-		}),
+		pgx.CopyFromSlice(size, ts.InsertData),
 	)
 	if err != nil {
 		return count, err
@@ -36,19 +46,13 @@ func InsertData(data DataInserter, pool *pgxpool.Pool, logStr string) (int64, er
 	return count, nil
 }
 
-func InsertNonscalarData(data TextInserter, pool *pgxpool.Pool, logStr string) (int64, error) {
-	size := data.Len()
+func InsertTextData(ts TextInserter, pool *pgxpool.Pool, logStr string) (int64, error) {
+	size := ts.Len()
 	count, err := pool.CopyFrom(
 		context.TODO(),
 		pgx.Identifier{"public", "nonscalar_data"},
 		[]string{"timeseries", "obstime", "obsvalue"},
-		pgx.CopyFromSlice(size, func(i int) ([]any, error) {
-			return []any{
-				data.ID(),
-				data.Obstime(i),
-				data.Text(i),
-			}, nil
-		}),
+		pgx.CopyFromSlice(size, ts.InsertText),
 	)
 	if err != nil {
 		return count, err
@@ -63,20 +67,13 @@ func InsertNonscalarData(data TextInserter, pool *pgxpool.Pool, logStr string) (
 	return count, nil
 }
 
-func InsertFlags(data FlagInserter, pool *pgxpool.Pool, logStr string) error {
-	size := data.Len()
+func InsertFlags(ts FlagInserter, table pgx.Identifier, columns []string, pool *pgxpool.Pool, logStr string) error {
+	size := ts.Len()
 	count, err := pool.CopyFrom(
 		context.TODO(),
-		pgx.Identifier{"flags", "kdvh"},
-		[]string{"timeseries", "obstime", "controlinfo", "useinfo"},
-		pgx.CopyFromSlice(size, func(i int) ([]any, error) {
-			return []any{
-				data.ID(),
-				data.Obstime(i),
-				data.Controlinfo(i),
-				data.Useinfo(i),
-			}, nil
-		}),
+		table,
+		columns,
+		pgx.CopyFromSlice(size, ts.InsertFlags),
 	)
 	if err != nil {
 		return err

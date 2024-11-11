@@ -162,7 +162,7 @@ func (table *Table) importStation(station os.DirEntry, pool *pgxpool.Pool, confi
 				return
 			}
 
-			ts := lard.NewTimeseries(tsid, data)
+			ts := NewTimeseries(tsid, data)
 			count, err := importData(ts, tsInfo, pool, config)
 			if err != nil {
 				return
@@ -175,7 +175,7 @@ func (table *Table) importStation(station os.DirEntry, pool *pgxpool.Pool, confi
 	return totRows, nil
 }
 
-func (table *Table) parseElementFile(filename string, tsInfo *TimeseriesInfo, config *ImportConfig) ([]lard.Obs, error) {
+func (table *Table) parseElementFile(filename string, tsInfo *TimeseriesInfo, config *ImportConfig) ([]LardObs, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		slog.Warn(fmt.Sprintf("Could not open file '%s': %s", filename, err))
@@ -197,7 +197,7 @@ func (table *Table) parseElementFile(filename string, tsInfo *TimeseriesInfo, co
 	return data, nil
 }
 
-func importData(ts *lard.Timeseries, tsInfo *TimeseriesInfo, pool *pgxpool.Pool, config *ImportConfig) (count int64, err error) {
+func importData(ts *LardTimeseries, tsInfo *TimeseriesInfo, pool *pgxpool.Pool, config *ImportConfig) (count int64, err error) {
 	if !(config.Skip == "data") {
 		if tsInfo.param.IsScalar {
 			count, err = lard.InsertData(ts, pool, tsInfo.logstr)
@@ -206,7 +206,7 @@ func importData(ts *lard.Timeseries, tsInfo *TimeseriesInfo, pool *pgxpool.Pool,
 				return 0, err
 			}
 		} else {
-			count, err = lard.InsertNonscalarData(ts, pool, tsInfo.logstr)
+			count, err = lard.InsertTextData(ts, pool, tsInfo.logstr)
 			if err != nil {
 				slog.Error(tsInfo.logstr + "failed non-scalar data bulk insertion - " + err.Error())
 				return 0, err
@@ -217,13 +217,12 @@ func importData(ts *lard.Timeseries, tsInfo *TimeseriesInfo, pool *pgxpool.Pool,
 	}
 
 	if !(config.Skip == "flags") {
-		if err := lard.InsertFlags(ts, pool, tsInfo.logstr); err != nil {
+		if err := lard.InsertFlags(ts, FLAGS_TABLE, FLAGS_COLS, pool, tsInfo.logstr); err != nil {
 			slog.Error(tsInfo.logstr + "failed flag bulk insertion - " + err.Error())
 		}
 	}
 
 	return count, nil
-
 }
 
 func getStationNumber(station os.DirEntry, stationList []string) (int32, error) {
@@ -273,7 +272,7 @@ func getTimeseriesID(tsInfo *TimeseriesInfo, pool *pgxpool.Pool) (int32, error) 
 	return tsid, nil
 }
 
-func (table *Table) parseData(handle *os.File, meta *TimeseriesInfo, config *ImportConfig) ([]lard.Obs, error) {
+func (table *Table) parseData(handle *os.File, meta *TimeseriesInfo, config *ImportConfig) ([]LardObs, error) {
 	scanner := bufio.NewScanner(handle)
 
 	var rowCount int
@@ -286,7 +285,7 @@ func (table *Table) parseData(handle *os.File, meta *TimeseriesInfo, config *Imp
 		}
 	}
 
-	data := make([]lard.Obs, 0, rowCount)
+	data := make([]LardObs, 0, rowCount)
 	for scanner.Scan() {
 		cols := strings.Split(scanner.Text(), config.Sep)
 

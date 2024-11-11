@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"migrate/lard"
 	"time"
 
 	"github.com/rickb777/period"
@@ -35,7 +34,7 @@ type Table struct {
 	ElemTableName string          // Name of the ELEM table
 	Path          string          // Directory name of where the dumped table is stored
 	dumpFunc      DumpFunction    // Function used to dump the KDVH table (found in `dump_functions.go`)
-	convFunc      ConvertFunction // Function that converts KDVH obs to LARD obs (found in `import_functions.go`)
+	convFunc      ConvertFunction // Function that converts KDVH obs to Lardobs (found in `import_functions.go`)
 	importUntil   int             // Import data only until the year specified by this field
 }
 
@@ -47,7 +46,7 @@ type DumpMeta struct {
 	flagTable string
 }
 
-type ConvertFunction func(Obs) (lard.Obs, error)
+type ConvertFunction func(Obs) (LardObs, error)
 type Obs struct {
 	*TimeseriesInfo
 	Obstime time.Time
@@ -118,7 +117,7 @@ func (t *Table) SetDumpFunc(fn DumpFunction) *Table {
 	return t
 }
 
-// Sets the function used to convert observations from the table to LARD observations
+// Sets the function used to convert observations from the table to Lardobservations
 func (t *Table) SetConvFunc(fn ConvertFunction) *Table {
 	t.convFunc = fn
 	return t
