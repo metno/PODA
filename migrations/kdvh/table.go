@@ -44,6 +44,7 @@ type DumpMeta struct {
 	station   string
 	dataTable string
 	flagTable string
+	overwrite bool
 }
 
 type ConvertFunction func(Obs) (LardObs, error)
