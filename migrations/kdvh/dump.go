@@ -62,12 +62,9 @@ func (table *Table) Dump(conn *sql.DB, config *DumpConfig) {
 	defer utils.SendEmailOnPanic(fmt.Sprintf("%s dump", table.TableName), config.Email)
 
 	table.Path = filepath.Join(config.BaseDir, table.Path)
-	if _, err := os.ReadDir(table.Path); err == nil && !config.Overwrite {
-		slog.Info(fmt.Sprint("Skipping data dump of ", table.TableName, " because dumped folder already exists"))
-		return
-	}
 
 	utils.SetLogFile(table.TableName, "dump")
+
 	elements, err := table.getElements(conn, config)
 	if err != nil {
 		return
@@ -113,6 +110,7 @@ func (table *Table) dumpElement(element string, conn *sql.DB, config *DumpConfig
 				station:   station,
 				dataTable: table.TableName,
 				flagTable: table.FlagTableName,
+				overwrite: config.Overwrite,
 			},
 			conn,
 		)
