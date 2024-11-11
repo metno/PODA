@@ -263,7 +263,6 @@ func makeDataPage(obs Obs) (LardObs, error) {
 	if !obs.param.IsScalar {
 		return LardObs{
 			Obstime:     obs.Obstime,
-			Data:        valPtr,
 			Text:        &obs.Data,
 			Useinfo:     obs.Useinfo(),
 			Controlinfo: controlinfo,
