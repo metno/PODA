@@ -107,21 +107,18 @@ func (table *Table) dumpElement(element string, conn *sql.DB, config *DumpConfig
 			return
 		}
 
-		err := table.dumpFunc(
-			path,
-			DumpMeta{
-				element:   element,
-				station:   station,
-				dataTable: table.TableName,
-				flagTable: table.FlagTableName,
-				overwrite: config.Overwrite,
-			},
-			conn,
-		)
+		meta := DumpMeta{
+			element:   element,
+			station:   station,
+			dataTable: table.TableName,
+			flagTable: table.FlagTableName,
+			overwrite: config.Overwrite,
+			logStr:    fmt.Sprintf("%s - %s - %s: ", table.TableName, station, element),
+		}
 
-		// NOTE: Non-nil errors are logged inside each DumpFunc
-		if err == nil {
-			slog.Info(fmt.Sprintf("%s - %s - %s: dumped successfully", table.TableName, station, element))
+		if err := table.dumpFunc(path, meta, conn); err == nil {
+			// NOTE: Non-nil errors are logged inside each DumpFunc
+			slog.Info(meta.logStr + "dumped successfully")
 		}
 	}
 }
