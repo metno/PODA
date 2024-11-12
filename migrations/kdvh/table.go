@@ -22,8 +22,6 @@ import (
 // each with different observations, where the column name is the 'elem_code'
 // (e.g. for air temperature, 'ta').
 //
-// TODO: are the timestamps UTC? Otherwise we probably need to convert them during import
-//
 // The ELEM tables have the following schema:
 // | stnr | elem_code | fdato | tdato | table_name | flag_table_name | audit_dato
 
