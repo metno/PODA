@@ -151,6 +151,12 @@ func dumpByYear(path string, meta DumpMeta, conn *sql.DB) error {
 	return nil
 }
 
+// T_HOMOGEN_MONTH contains seasonal and annual data, plus other derivative
+// data combining both of these. We decided to dump only the monthly data (season BETWEEN 1 AND 12) for
+//   - TAM (mean hourly temperature), and
+//   - RR (hourly precipitations, note that in Stinfosys this parameter is 'RR_1')
+//
+// We calculate the other data on the fly (outside this program) if needed.
 func dumpHomogenMonth(path string, meta DumpMeta, conn *sql.DB) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
