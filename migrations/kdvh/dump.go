@@ -151,7 +151,8 @@ var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
 func (table *Table) fetchElements(conn *sql.DB) (elements []string, err error) {
 	slog.Info(fmt.Sprintf("Fetching elements for %s...", table.TableName))
 
-	// TODO: not sure why we only dump these two for this table
+	// NOTE: T_HOMOGEN_MONTH is a special case, refer to `dumpHomogenMonth` in
+	// `dump_functions.go` for more information
 	if table.TableName == "T_HOMOGEN_MONTH" {
 		return []string{"rr", "tam"}, nil
 	}
