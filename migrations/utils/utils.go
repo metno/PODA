@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
+	"strings"
 
 	"github.com/schollz/progressbar/v3"
 )
@@ -50,6 +51,16 @@ func FilterSlice[T comparable](slice, reference []T, formatMsg string) []T {
 		out = append(out, s)
 	}
 	return out
+}
+
+// Saves a slice to a file
+func SaveToFile(values []string, filename string) error {
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	file.WriteString(strings.Join(values, "\n"))
+	return file.Close()
 }
 
 func SetLogFile(tableName, procedure string) {

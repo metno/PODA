@@ -62,6 +62,10 @@ func (table *Table) Dump(conn *sql.DB, config *DumpConfig) {
 	defer utils.SendEmailOnPanic(fmt.Sprintf("%s dump", table.TableName), config.Email)
 
 	table.Path = filepath.Join(config.BaseDir, table.Path)
+	if err := os.MkdirAll(table.Path, os.ModePerm); err != nil {
+		slog.Error(err.Error())
+		return
+	}
 
 	utils.SetLogFile(table.TableName, "dump")
 
@@ -127,6 +131,11 @@ func (table *Table) getElements(conn *sql.DB, config *DumpConfig) ([]string, err
 	elements, err := table.fetchElements(conn)
 	if err != nil {
 		return nil, err
+	}
+
+	filename := filepath.Join(table.Path, "elements.txt")
+	if err := utils.SaveToFile(elements, filename); err != nil {
+		slog.Warn("Could not save element list to " + filename)
 	}
 
 	elements = utils.FilterSlice(config.Elements, elements, "")
