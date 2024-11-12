@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// Error returned if no observations are found for a (station, element) pair
+var EMPTY_QUERY_ERR error = errors.New("The query did not return any rows")
+
 func fileExists(filename string, overwrite bool) error {
 	if _, err := os.Stat(filename); err == nil && !overwrite {
 		return errors.New(
@@ -31,20 +34,17 @@ func fetchYearRange(tableName, station string, conn *sql.DB) (int64, int64, erro
 	query := fmt.Sprintf("SELECT min(to_char(dato, 'yyyy')), max(to_char(dato, 'yyyy')) FROM %s WHERE stnr = $1", tableName)
 
 	if err := conn.QueryRow(query, station).Scan(&beginStr, &endStr); err != nil {
-		slog.Error(fmt.Sprint("Could not query row: ", err))
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("Could not query row: %v", err)
 	}
 
 	begin, err := strconv.ParseInt(beginStr, 10, 64)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Could not parse year '%s': %s", beginStr, err))
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("Could not parse year '%s': %s", beginStr, err)
 	}
 
 	end, err := strconv.ParseInt(endStr, 10, 64)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Could not parse year '%s': %s", endStr, err))
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("Could not parse year '%s': %s", endStr, err)
 	}
 
 	return begin, end, nil
@@ -53,6 +53,7 @@ func fetchYearRange(tableName, station string, conn *sql.DB) (int64, int64, erro
 func dumpByYearDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
 	begin, end, err := fetchYearRange(meta.dataTable, meta.station, conn)
 	if err != nil {
+		slog.Error(meta.logStr + err.Error())
 		return err
 	}
 
@@ -67,24 +68,24 @@ func dumpByYearDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
 	for year := begin; year < end; year++ {
 		yearPath := filepath.Join(path, fmt.Sprint(year))
 		if err := os.MkdirAll(yearPath, os.ModePerm); err != nil {
-			slog.Error(err.Error())
+			slog.Error(meta.logStr + err.Error())
 			continue
 		}
 
 		filename := filepath.Join(yearPath, meta.element+".csv")
 		if err := fileExists(filename, meta.overwrite); err != nil {
-			slog.Warn(err.Error())
+			slog.Warn(meta.logStr + err.Error())
 			continue
 		}
 
 		rows, err := conn.Query(query, meta.station, year)
 		if err != nil {
-			slog.Error(fmt.Sprint("Could not query KDVH: ", err))
+			slog.Error(meta.logStr + fmt.Sprint("Could not query KDVH: ", err))
 			continue
 		}
 
 		if err := dumpToFile(filename, rows); err != nil {
-			slog.Error(err.Error())
+			slog.Error(meta.logStr + err.Error())
 			continue
 		}
 	}
@@ -126,24 +127,24 @@ func dumpByYear(path string, meta DumpMeta, conn *sql.DB) error {
 	for year := begin; year < end; year++ {
 		yearPath := filepath.Join(path, fmt.Sprint(year))
 		if err := os.MkdirAll(path, os.ModePerm); err != nil {
-			slog.Error(err.Error())
+			slog.Error(meta.logStr + err.Error())
 			continue
 		}
 
 		filename := filepath.Join(yearPath, meta.element+".csv")
 		if err := fileExists(filename, meta.overwrite); err != nil {
-			slog.Warn(err.Error())
+			slog.Warn(meta.logStr + err.Error())
 			continue
 		}
 
 		rows, err := conn.Query(query, meta.station, year)
 		if err != nil {
-			slog.Error(fmt.Sprint("Could not query KDVH: ", err))
+			slog.Error(meta.logStr + fmt.Sprint("Could not query KDVH: ", err))
 			continue
 		}
 
 		if err := dumpToFile(filename, rows); err != nil {
-			slog.Error(err.Error())
+			slog.Error(meta.logStr + err.Error())
 			continue
 		}
 	}
@@ -160,7 +161,7 @@ func dumpByYear(path string, meta DumpMeta, conn *sql.DB) error {
 func dumpHomogenMonth(path string, meta DumpMeta, conn *sql.DB) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
-		slog.Warn(err.Error())
+		slog.Warn(meta.logStr + err.Error())
 		return err
 	}
 
@@ -173,12 +174,12 @@ func dumpHomogenMonth(path string, meta DumpMeta, conn *sql.DB) error {
 
 	rows, err := conn.Query(query, meta.station)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error(meta.logStr + err.Error())
 		return err
 	}
 
 	if err := dumpToFile(filename, rows); err != nil {
-		slog.Error(err.Error())
+		slog.Error(meta.logStr + err.Error())
 		return err
 	}
 
@@ -188,7 +189,7 @@ func dumpHomogenMonth(path string, meta DumpMeta, conn *sql.DB) error {
 func dumpDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
-		slog.Warn(err.Error())
+		slog.Warn(meta.logStr + err.Error())
 		return err
 	}
 
@@ -201,12 +202,12 @@ func dumpDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
 
 	rows, err := conn.Query(query, meta.station)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error(meta.logStr + err.Error())
 		return err
 	}
 
 	if err := dumpToFile(filename, rows); err != nil {
-		slog.Error(err.Error())
+		slog.Error(meta.logStr + err.Error())
 		return err
 	}
 
@@ -216,7 +217,7 @@ func dumpDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
 func dumpDataAndFlags(path string, meta DumpMeta, conn *sql.DB) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
-		slog.Warn(err.Error())
+		slog.Warn(meta.logStr + err.Error())
 		return err
 	}
 
@@ -237,12 +238,14 @@ func dumpDataAndFlags(path string, meta DumpMeta, conn *sql.DB) error {
 
 	rows, err := conn.Query(query, meta.station)
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error(meta.logStr + err.Error())
 		return err
 	}
 
-	if err := dumpToFile(path, rows); err != nil {
-		slog.Error(err.Error())
+	if err := dumpToFile(filename, rows); err != nil {
+		if !errors.Is(err, EMPTY_QUERY_ERR) {
+			slog.Error(meta.logStr + err.Error())
+		}
 		return err
 	}
 

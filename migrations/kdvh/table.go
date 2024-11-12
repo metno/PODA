@@ -45,6 +45,7 @@ type DumpMeta struct {
 	dataTable string
 	flagTable string
 	overwrite bool
+	logStr    string
 }
 
 type ConvertFunction func(Obs) (LardObs, error)
