@@ -13,14 +13,16 @@ Go package used to dump tables from old databases (KDVH, Kvalobs) and import the
 1. Dump tables from KDVH
 
    ```terminal
-   ./migrate kdvh dump --help
+   ./migrate kdvh dump
    ```
 
-1. Import dumps into LARD
+1. Import dumps into LARD (you can use the `--help` flag to see all available options)
 
    ```terminal
-   ./migrate kdvh import --help
+   ./migrate kdvh import
    ```
+
+For each command, you can use the `--help` flag to see all available options.
 
 ## Other notes
 
