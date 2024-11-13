@@ -46,8 +46,8 @@ type DumpMeta struct {
 	logStr    string
 }
 
-type ConvertFunction func(Obs) (LardObs, error)
-type Obs struct {
+type ConvertFunction func(KdvhObs) (LardObs, error)
+type KdvhObs struct {
 	*TimeseriesInfo
 	Obstime time.Time
 	Data    string

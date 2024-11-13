@@ -4,21 +4,21 @@ import "testing"
 
 func TestFlagsAreValid(t *testing.T) {
 	type testCase struct {
-		input    Obs
+		input    KdvhObs
 		expected bool
 	}
 
 	cases := []testCase{
-		{Obs{Flags: "12309"}, true},
-		{Obs{Flags: "984.3"}, false},
-		{Obs{Flags: ".1111"}, false},
-		{Obs{Flags: "1234."}, false},
-		{Obs{Flags: "12.2.4"}, false},
-		{Obs{Flags: "12.343"}, false},
-		{Obs{Flags: ""}, false},
-		{Obs{Flags: "asdas"}, false},
-		{Obs{Flags: "12a3a"}, false},
-		{Obs{Flags: "1sdfl"}, false},
+		{KdvhObs{Flags: "12309"}, true},
+		{KdvhObs{Flags: "984.3"}, false},
+		{KdvhObs{Flags: ".1111"}, false},
+		{KdvhObs{Flags: "1234."}, false},
+		{KdvhObs{Flags: "12.2.4"}, false},
+		{KdvhObs{Flags: "12.343"}, false},
+		{KdvhObs{Flags: ""}, false},
+		{KdvhObs{Flags: "asdas"}, false},
+		{KdvhObs{Flags: "12a3a"}, false},
+		{KdvhObs{Flags: "1sdfl"}, false},
 	}
 
 	for _, c := range cases {
