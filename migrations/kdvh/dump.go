@@ -15,33 +15,15 @@ import (
 )
 
 type DumpConfig struct {
-	BaseDir     string   `short:"p" long:"path" default:"./dumps/kdvh" description:"Location the dumped data will be stored in"`
-	TablesCmd   string   `short:"t" long:"table" default:"" description:"Optional comma separated list of table names. By default all available tables are processed"`
-	StationsCmd string   `short:"s" long:"stnr" default:"" description:"Optional comma separated list of stations IDs. By default all station IDs are processed"`
-	ElementsCmd string   `short:"e" long:"elem" default:"" description:"Optional comma separated list of element codes. By default all element codes are processed"`
-	Overwrite   bool     `long:"overwrite" description:"Overwrite any existing dumped files"`
-	Email       []string `long:"email" description:"Optional email address used to notify if the program crashed"`
-
-	Tables   []string
-	Stations []string
-	Elements []string
-}
-
-func (config *DumpConfig) setup() {
-	if config.TablesCmd != "" {
-		config.Tables = strings.Split(config.TablesCmd, ",")
-	}
-	if config.StationsCmd != "" {
-		config.Stations = strings.Split(config.StationsCmd, ",")
-	}
-	if config.ElementsCmd != "" {
-		config.Elements = strings.Split(config.ElementsCmd, ",")
-	}
+	BaseDir   string   `short:"p" long:"path" default:"./dumps/kdvh" description:"Location the dumped data will be stored in"`
+	Tables    []string `short:"t" delimiter:"," long:"table" default:"" description:"Optional comma separated list of table names. By default all available tables are processed"`
+	Stations  []string `short:"s" delimiter:"," long:"stnr" default:"" description:"Optional comma separated list of stations IDs. By default all station IDs are processed"`
+	Elements  []string `short:"e" delimiter:"," long:"elem" default:"" description:"Optional comma separated list of element codes. By default all element codes are processed"`
+	Overwrite bool     `long:"overwrite" description:"Overwrite any existing dumped files"`
+	Email     []string `long:"email" delimiter:"," description:"Optional comma separated list of email addresses used to notify if the program crashed"`
 }
 
 func (config *DumpConfig) Execute([]string) error {
-	config.setup()
-
 	conn, err := sql.Open("pgx", os.Getenv("KDVH_PROXY_CONN"))
 	if err != nil {
 		slog.Error(err.Error())
