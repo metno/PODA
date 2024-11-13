@@ -22,19 +22,15 @@ import (
 )
 
 type ImportConfig struct {
-	Verbose     bool     `short:"v" description:"Increase verbosity level"`
-	BaseDir     string   `short:"p" long:"path" default:"./dumps/kdvh" description:"Location the dumped data will be stored in"`
-	TablesCmd   string   `short:"t" long:"table" default:"" description:"Optional comma separated list of table names. By default all available tables are processed"`
-	StationsCmd string   `short:"s" long:"station" default:"" description:"Optional comma separated list of stations IDs. By default all station IDs are processed"`
-	ElementsCmd string   `short:"e" long:"elemcode" default:"" description:"Optional comma separated list of element codes. By default all element codes are processed"`
-	Sep         string   `long:"sep" default:","  description:"Separator character in the dumped files. Needs to be quoted"`
-	HasHeader   bool     `long:"header" description:"Add this flag if the dumped files have a header row"`
-	Skip        string   `long:"skip" choice:"data" choice:"flags" description:"Skip import of data or flags"`
-	Email       []string `long:"email" description:"Optional email address used to notify if the program crashed"`
-
-	Tables   []string
-	Stations []string
-	Elements []string
+	Verbose   bool     `short:"v" description:"Increase verbosity level"`
+	BaseDir   string   `short:"p" long:"path" default:"./dumps/kdvh" description:"Location the dumped data will be stored in"`
+	Tables    []string `short:"t" long:"table" delimiter:"," default:"" description:"Optional comma separated list of table names. By default all available tables are processed"`
+	Stations  []string `short:"s" long:"station" delimiter:"," default:"" description:"Optional comma separated list of stations IDs. By default all station IDs are processed"`
+	Elements  []string `short:"e" long:"elemcode" delimiter:"," default:"" description:"Optional comma separated list of element codes. By default all element codes are processed"`
+	Sep       string   `long:"sep" default:","  description:"Separator character in the dumped files. Needs to be quoted"`
+	HasHeader bool     `long:"header" description:"Add this flag if the dumped files have a header row"`
+	Skip      string   `long:"skip" choice:"data" choice:"flags" description:"Skip import of data or flags"`
+	Email     []string `long:"email" delimiter:"," description:"Optional comma separated list of email addresses used to notify if the program crashed"`
 
 	OffsetMap map[StinfoKey]period.Period // Map of offsets used to correct (?) KDVH times for specific parameters
 	StinfoMap map[StinfoKey]StinfoParam   // Map of metadata used to query timeseries ID in LARD
@@ -45,15 +41,6 @@ func (config *ImportConfig) setup() {
 	if len(config.Sep) > 1 {
 		fmt.Printf("Error: '--sep' only accepts single-byte characters. Got %s", config.Sep)
 		os.Exit(1)
-	}
-	if config.TablesCmd != "" {
-		config.Tables = strings.Split(config.TablesCmd, ",")
-	}
-	if config.StationsCmd != "" {
-		config.Stations = strings.Split(config.StationsCmd, ",")
-	}
-	if config.ElementsCmd != "" {
-		config.Elements = strings.Split(config.ElementsCmd, ",")
 	}
 	config.CacheMetadata()
 }
