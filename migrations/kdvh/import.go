@@ -43,8 +43,8 @@ type ImportConfig struct {
 
 func (config *ImportConfig) setup() {
 	if len(config.Sep) > 1 {
-		slog.Warn("'--sep' only accepts single-byte characters. Defaulting to ','")
-		config.Sep = ","
+		fmt.Printf("Error: '--sep' only accepts single-byte characters. Got %s", config.Sep)
+		os.Exit(1)
 	}
 	if config.TablesCmd != "" {
 		config.Tables = strings.Split(config.TablesCmd, ",")
