@@ -33,7 +33,7 @@ type Table struct {
 	Path          string          // Directory name of where the dumped table is stored
 	dumpFunc      DumpFunction    // Function used to dump the KDVH table (found in `dump_functions.go`)
 	convFunc      ConvertFunction // Function that converts KDVH obs to Lardobs (found in `import_functions.go`)
-	importUntil   int             // Import data only until the year specified by this field
+	importUntil   int             // Import data only until the year specified by this field. If this field is not explicitly set, table import is skipped.
 }
 
 type DumpFunction func(path string, meta DumpMeta, conn *sql.DB) error
