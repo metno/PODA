@@ -7,7 +7,6 @@ type Cmd struct {
 	List   ListConfig   `command:"list" description:"List available KDVH tables"`
 }
 
-// The KDVH database simply contains a map of "table name" to `Table`
 var KDVH map[string]*Table = map[string]*Table{
 	// Section 1: tables that need to be migrated entirely
 	// TODO: figure out if we need to use the elem_code_paramid_level_sensor_t_edata table?
