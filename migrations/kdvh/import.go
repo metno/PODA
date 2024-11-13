@@ -305,7 +305,7 @@ func (table *Table) parseData(handle *os.File, meta *TimeseriesInfo, config *Imp
 			break
 		}
 
-		temp, err := table.convFunc(Obs{meta, obsTime, cols[1], cols[2]})
+		temp, err := table.convFunc(KdvhObs{meta, obsTime, cols[1], cols[2]})
 		if err != nil {
 			return nil, err
 		}
