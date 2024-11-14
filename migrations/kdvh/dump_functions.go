@@ -14,8 +14,18 @@ import (
 	"time"
 )
 
+// Format string for date field in CSV files
+const TIMEFORMAT string = "2006-01-02_15:04:05"
+
 // Error returned if no observations are found for a (station, element) pair
 var EMPTY_QUERY_ERR error = errors.New("The query did not return any rows")
+
+// Struct representing a single record in the output CSV file
+type Record struct {
+	time time.Time
+	data sql.NullString
+	flag sql.NullString
+}
 
 func fileExists(filename string, overwrite bool) error {
 	if _, err := os.Stat(filename); err == nil && !overwrite {
@@ -28,7 +38,7 @@ func fileExists(filename string, overwrite bool) error {
 	return nil
 }
 
-// Fetch min and max year from table, needed for tables that are dumped by year
+// Helper function for dumpByYear functinos Fetch min and max year from table, needed for tables that are dumped by year
 func fetchYearRange(tableName, station string, conn *sql.DB) (int64, int64, error) {
 	var beginStr, endStr string
 	query := fmt.Sprintf("SELECT min(to_char(dato, 'yyyy')), max(to_char(dato, 'yyyy')) FROM %s WHERE stnr = $1", tableName)
@@ -253,12 +263,17 @@ func dumpDataAndFlags(path string, meta DumpMeta, conn *sql.DB) error {
 }
 
 func dumpToFile(filename string, rows *sql.Rows) error {
-	file, err := os.Create(filename)
+	lines, err := sortRows(rows)
 	if err != nil {
 		return err
 	}
 
-	lines, err := sortRows(rows)
+	// Return if query was empty
+	if len(lines) == 0 {
+		return EMPTY_QUERY_ERR
+	}
+
+	file, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
@@ -268,13 +283,6 @@ func dumpToFile(filename string, rows *sql.Rows) error {
 		return errors.Join(err, closeErr)
 	}
 	return err
-}
-
-// Struct representing a single record in the output CSV file
-type Record struct {
-	time time.Time
-	data sql.NullString
-	flag sql.NullString
 }
 
 // Scans the rows and collects them in a slice of chronologically sorted lines
@@ -298,9 +306,6 @@ func sortRows(rows *sql.Rows) ([]Record, error) {
 
 	return records, rows.Err()
 }
-
-// Format string for date field in CSV files
-const TIMEFORMAT string = "2006-01-02_15:04:05"
 
 // Writes queried (time | data | flag) columns to CSV
 func writeElementFile(lines []Record, file io.Writer) error {

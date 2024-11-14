@@ -14,6 +14,9 @@ import (
 	"migrate/utils"
 )
 
+// List of columns that we do not need to select when extracting the element codes from a KDVH table
+var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
+
 type DumpConfig struct {
 	BaseDir   string   `short:"p" long:"path" default:"./dumps/kdvh" description:"Location the dumped data will be stored in"`
 	Tables    []string `short:"t" delimiter:"," long:"table" default:"" description:"Optional comma separated list of table names. By default all available tables are processed"`
@@ -56,32 +59,14 @@ func (table *Table) Dump(conn *sql.DB, config *DumpConfig) {
 		return
 	}
 
-	bar := utils.NewBar(len(elements), table.TableName)
-
-	// TODO: should be safe to spawn goroutines/waitgroup here with connection pool?
-	bar.RenderBlank()
-	for _, element := range elements {
-		table.dumpElement(element, conn, config)
-		bar.Add(1)
-	}
-}
-
-// TODO: maybe we don't do this? Or can we use pgdump/copy?
-// The problem is that there are no indices on the tables, that's why the queries are super slow
-// Dumping the whole table might be a lot faster (for T_MDATA it's ~10 times faster!),
-// but it might be more difficult to recover if something goes wrong?
-// =>
-// copyQuery := fmt.SPrintf("\\copy (select * from t_mdata) TO '%s/%s.csv' WITH CSV HEADER", config.BaseDir, table.TableName)
-// cmd := exec.Command("psql", CONN_STRING, "-c", copyQuery)
-// cmd.Stderr = &bytes.Buffer{}
-// err = cmd.Run()
-func (table *Table) dumpElement(element string, conn *sql.DB, config *DumpConfig) {
-	stations, err := table.getStationsWithElement(element, conn, config)
+	stations, err := table.getStations(conn, config)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Could not fetch stations for table %s: %v", table.TableName, err))
 		return
 	}
 
+	bar := utils.NewBar(len(stations), table.TableName)
+
+	bar.RenderBlank()
 	for _, station := range stations {
 		path := filepath.Join(table.Path, string(station))
 		if err := os.MkdirAll(path, os.ModePerm); err != nil {
@@ -89,19 +74,26 @@ func (table *Table) dumpElement(element string, conn *sql.DB, config *DumpConfig
 			return
 		}
 
-		meta := DumpMeta{
-			element:   element,
-			station:   station,
-			dataTable: table.TableName,
-			flagTable: table.FlagTableName,
-			overwrite: config.Overwrite,
-			logStr:    fmt.Sprintf("%s - %s - %s: ", table.TableName, station, element),
+		for _, element := range elements {
+			err := table.dumpFunc(
+				path,
+				DumpMeta{
+					element:   element,
+					station:   station,
+					dataTable: table.TableName,
+					flagTable: table.FlagTableName,
+					overwrite: config.Overwrite,
+				},
+				conn,
+			)
+
+			// NOTE: Non-nil errors are logged inside each DumpFunc
+			if err == nil {
+				slog.Info(fmt.Sprintf("%s - %s - %s: dumped successfully", table.TableName, station, element))
+			}
 		}
 
-		if err := table.dumpFunc(path, meta, conn); err == nil {
-			// NOTE: Non-nil errors are logged inside each DumpFunc
-			slog.Info(meta.logStr + "dumped successfully")
-		}
+		bar.Add(1)
 	}
 }
 
@@ -120,9 +112,6 @@ func (table *Table) getElements(conn *sql.DB, config *DumpConfig) ([]string, err
 	elements = utils.FilterSlice(config.Elements, elements, "")
 	return elements, nil
 }
-
-// List of columns that we do not need to select when extracting the element codes from a KDVH table
-var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
 
 // Fetch column names for a given table
 // We skip the columns defined in INVALID_COLUMNS and all columns that contain the 'kopi' string
@@ -163,57 +152,29 @@ func (table *Table) fetchElements(conn *sql.DB) (elements []string, err error) {
 }
 
 // Fetches station numbers and filters them based on user input
-func (table *Table) getStationsWithElement(element string, conn *sql.DB, config *DumpConfig) ([]string, error) {
-	stations, err := table.fetchStationsWithElement(element, conn)
+func (table *Table) getStations(conn *sql.DB, config *DumpConfig) ([]string, error) {
+	stations, err := table.fetchStnrFromElemTable(conn)
 	if err != nil {
 		return nil, err
 	}
 
-	msg := fmt.Sprintf("Element '%s'", element) + "not available for station '%s'"
-	stations = utils.FilterSlice(config.Stations, stations, msg)
+	stations = utils.FilterSlice(config.Stations, stations, "")
 	return stations, nil
 }
 
-// Fetches the unique station numbers in the table for a given element (and when that element is not null)
-// NOTE: splitting by element does make it a bit better, because we avoid quering for stations that have no data or flag for that element?
-func (table *Table) fetchStationsWithElement(element string, conn *sql.DB) (stations []string, err error) {
-	slog.Info(fmt.Sprintf("Fetching station numbers for %s (this can take a while)...", element))
+// This function uses the ELEM table to fetch the station numbers
+func (table *Table) fetchStnrFromElemTable(conn *sql.DB) (stations []string, err error) {
+	slog.Info(fmt.Sprint("Fetching station numbers..."))
 
-	query := fmt.Sprintf(
-		`SELECT DISTINCT stnr FROM %s WHERE %s IS NOT NULL`,
-		table.TableName,
-		element,
-	)
-
-	rows, err := conn.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var stnr string
-		if err := rows.Scan(&stnr); err != nil {
-			return nil, err
-		}
-		stations = append(stations, stnr)
+	var rows *sql.Rows
+	if table.ElemTableName == "T_ELEM_OBS" {
+		query := `SELECT DISTINCT stnr FROM t_elem_obs WHERE table_name = $1`
+		rows, err = conn.Query(query, table.TableName)
+	} else {
+		query := fmt.Sprintf("SELECT DISTINCT stnr FROM %s", strings.ToLower(table.ElemTableName))
+		rows, err = conn.Query(query)
 	}
 
-	return stations, rows.Err()
-}
-
-// Fetches all unique station numbers in the table
-// FIXME: the DISTINCT query can be extremely slow
-// NOTE: decided to use fetchStationsWithElement instead
-func (table *Table) fetchStationNumbers(conn *sql.DB) (stations []string, err error) {
-	slog.Info(fmt.Sprint("Fetching station numbers (this can take a while)..."))
-
-	query := fmt.Sprintf(
-		`SELECT DISTINCT stnr FROM %s`,
-		table.TableName,
-	)
-
-	rows, err := conn.Query(query)
 	if err != nil {
 		return nil, err
 	}
