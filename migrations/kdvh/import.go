@@ -21,6 +21,9 @@ import (
 	"migrate/utils"
 )
 
+// TODO: add CALL_SIGN? It's not in stinfosys?
+var INVALID_ELEMENTS = []string{"TYPEID", "TAM_NORMAL_9120", "RRA_NORMAL_9120", "OT", "OTN", "OTX", "DD06", "DD12", "DD18"}
+
 type ImportConfig struct {
 	Verbose   bool     `short:"v" description:"Increase verbosity level"`
 	BaseDir   string   `short:"p" long:"path" default:"./dumps/kdvh" description:"Location the dumped data will be stored in"`
@@ -67,7 +70,7 @@ func (config *ImportConfig) Execute([]string) error {
 }
 
 func (table *Table) Import(pool *pgxpool.Pool, config *ImportConfig) (rowsInserted int64) {
-	defer utils.SendEmailOnPanic("importTable", config.Email)
+	defer utils.SendEmailOnPanic("table.Import", config.Email)
 
 	if table.importUntil == 0 {
 		if config.Verbose {
@@ -144,72 +147,54 @@ func (table *Table) importStation(station os.DirEntry, pool *pgxpool.Pool, confi
 			}
 
 			filename := filepath.Join(dir, element.Name())
-			data, err := table.parseElementFile(filename, tsInfo, config)
+			file, err := os.Open(filename)
+			if err != nil {
+				slog.Warn(fmt.Sprintf("Could not open file '%s': %s", filename, err))
+				return
+			}
+			defer file.Close()
+
+			data, text, flag, err := table.parseData(file, tsid, tsInfo, config)
 			if err != nil {
 				return
 			}
 
-			ts := NewTimeseries(tsid, data)
-			count, err := importData(ts, tsInfo, pool, config)
-			if err != nil {
+			if len(data) == 0 {
+				slog.Info(tsInfo.logstr + "no rows to insert (all obstimes > max import time)")
 				return
 			}
+
+			var count int64
+			if !(config.Skip == "data") {
+				if tsInfo.param.IsScalar {
+					count, err = lard.InsertData(data, pool, tsInfo.logstr)
+					if err != nil {
+						slog.Error(tsInfo.logstr + "failed data bulk insertion - " + err.Error())
+						return
+					}
+				} else {
+					count, err = lard.InsertTextData(text, pool, tsInfo.logstr)
+					if err != nil {
+						slog.Error(tsInfo.logstr + "failed non-scalar data bulk insertion - " + err.Error())
+						return
+					}
+					// TODO: should we skip inserting flags here? In kvalobs there are no flags for text data
+					// return count, nil
+				}
+			}
+
+			if !(config.Skip == "flags") {
+				if err := lard.InsertFlags(flag, pool, tsInfo.logstr); err != nil {
+					slog.Error(tsInfo.logstr + "failed flag bulk insertion - " + err.Error())
+				}
+			}
+
 			totRows += count
 		}()
 	}
 	wg.Wait()
 
 	return totRows, nil
-}
-
-func (table *Table) parseElementFile(filename string, tsInfo *TimeseriesInfo, config *ImportConfig) ([]LardObs, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		slog.Warn(fmt.Sprintf("Could not open file '%s': %s", filename, err))
-		return nil, err
-	}
-	defer file.Close()
-
-	data, err := table.parseData(file, tsInfo, config)
-	if err != nil {
-		slog.Error(fmt.Sprintf("Could not parse data from '%s': %s", filename, err))
-		return nil, err
-	}
-
-	if len(data) == 0 {
-		slog.Info(tsInfo.logstr + "no rows to insert (all obstimes > max import time)")
-		return nil, err
-	}
-
-	return data, nil
-}
-
-func importData(ts *LardTimeseries, tsInfo *TimeseriesInfo, pool *pgxpool.Pool, config *ImportConfig) (count int64, err error) {
-	if !(config.Skip == "data") {
-		if tsInfo.param.IsScalar {
-			count, err = lard.InsertData(ts, pool, tsInfo.logstr)
-			if err != nil {
-				slog.Error(tsInfo.logstr + "failed data bulk insertion - " + err.Error())
-				return 0, err
-			}
-		} else {
-			count, err = lard.InsertTextData(ts, pool, tsInfo.logstr)
-			if err != nil {
-				slog.Error(tsInfo.logstr + "failed non-scalar data bulk insertion - " + err.Error())
-				return 0, err
-			}
-			// TODO: should we skip inserting flags here? In kvalobs there are no flags for text data
-			// return count, nil
-		}
-	}
-
-	if !(config.Skip == "flags") {
-		if err := lard.InsertFlags(ts, FLAGS_TABLE, FLAGS_COLS, pool, tsInfo.logstr); err != nil {
-			slog.Error(tsInfo.logstr + "failed flag bulk insertion - " + err.Error())
-		}
-	}
-
-	return count, nil
 }
 
 func getStationNumber(station os.DirEntry, stationList []string) (int32, error) {
@@ -227,6 +212,10 @@ func getStationNumber(station os.DirEntry, stationList []string) (int32, error) 
 	}
 
 	return int32(stnr), nil
+}
+
+func elemcodeIsInvalid(element string) bool {
+	return strings.Contains(element, "KOPI") || slices.Contains(INVALID_ELEMENTS, element)
 }
 
 func getElementCode(element os.DirEntry, elementList []string) (string, error) {
@@ -259,26 +248,27 @@ func getTimeseriesID(tsInfo *TimeseriesInfo, pool *pgxpool.Pool) (int32, error) 
 	return tsid, nil
 }
 
-func (table *Table) parseData(handle *os.File, meta *TimeseriesInfo, config *ImportConfig) ([]LardObs, error) {
+func (table *Table) parseData(handle *os.File, id int32, meta *TimeseriesInfo, config *ImportConfig) ([][]any, [][]any, [][]any, error) {
 	scanner := bufio.NewScanner(handle)
 
 	var rowCount int
 	// Try to infer row count from header
 	if config.HasHeader {
 		scanner.Scan()
-		// rowCount, _ = strconv.Atoi(scanner.Text())
-		if temp, err := strconv.Atoi(scanner.Text()); err == nil {
-			rowCount = temp
-		}
+		rowCount, _ = strconv.Atoi(scanner.Text())
 	}
 
-	data := make([]LardObs, 0, rowCount)
+	// Prepare slices for pgx.CopyFromRows
+	data := make([][]any, 0, rowCount)
+	text := make([][]any, 0, rowCount)
+	flag := make([][]any, 0, rowCount)
+
 	for scanner.Scan() {
 		cols := strings.Split(scanner.Text(), config.Sep)
 
 		obsTime, err := time.Parse("2006-01-02_15:04:05", cols[0])
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 
 		// Only import data between KDVH's defined fromtime and totime
@@ -292,20 +282,14 @@ func (table *Table) parseData(handle *os.File, meta *TimeseriesInfo, config *Imp
 			break
 		}
 
-		temp, err := table.convFunc(KdvhObs{meta, obsTime, cols[1], cols[2]})
+		dataRow, textRow, flagRow, err := table.convFunc(KdvhObs{meta, id, obsTime, cols[1], cols[2]})
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
-
-		data = append(data, temp)
+		data = append(data, dataRow.ToRow())
+		text = append(text, textRow.ToRow())
+		flag = append(flag, flagRow.ToRow())
 	}
 
-	return data, nil
-}
-
-// TODO: add CALL_SIGN? It's not in stinfosys?
-var INVALID_ELEMENTS = []string{"TYPEID", "TAM_NORMAL_9120", "RRA_NORMAL_9120", "OT", "OTN", "OTX", "DD06", "DD12", "DD18"}
-
-func elemcodeIsInvalid(element string) bool {
-	return strings.Contains(element, "KOPI") || slices.Contains(INVALID_ELEMENTS, element)
+	return data, text, flag, nil
 }

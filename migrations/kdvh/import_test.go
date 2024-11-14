@@ -9,20 +9,20 @@ func TestFlagsAreValid(t *testing.T) {
 	}
 
 	cases := []testCase{
-		{KdvhObs{Flags: "12309"}, true},
-		{KdvhObs{Flags: "984.3"}, false},
-		{KdvhObs{Flags: ".1111"}, false},
-		{KdvhObs{Flags: "1234."}, false},
-		{KdvhObs{Flags: "12.2.4"}, false},
-		{KdvhObs{Flags: "12.343"}, false},
-		{KdvhObs{Flags: ""}, false},
-		{KdvhObs{Flags: "asdas"}, false},
-		{KdvhObs{Flags: "12a3a"}, false},
-		{KdvhObs{Flags: "1sdfl"}, false},
+		{KdvhObs{flags: "12309"}, true},
+		{KdvhObs{flags: "984.3"}, false},
+		{KdvhObs{flags: ".1111"}, false},
+		{KdvhObs{flags: "1234."}, false},
+		{KdvhObs{flags: "12.2.4"}, false},
+		{KdvhObs{flags: "12.343"}, false},
+		{KdvhObs{flags: ""}, false},
+		{KdvhObs{flags: "asdas"}, false},
+		{KdvhObs{flags: "12a3a"}, false},
+		{KdvhObs{flags: "1sdfl"}, false},
 	}
 
 	for _, c := range cases {
-		t.Log("Testing flag:", c.input.Flags)
+		t.Log("Testing flag:", c.input.flags)
 
 		if result := c.input.flagsAreValid(); result != c.expected {
 			t.Errorf("Got %v, wanted %v", result, c.expected)
