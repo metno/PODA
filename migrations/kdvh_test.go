@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
-	// "github.com/rickb777/period"
 
 	"migrate/kdvh"
 )
@@ -15,18 +14,24 @@ import (
 const LARD_STRING string = "host=localhost user=postgres dbname=postgres password=postgres"
 
 func mockConfig(t *ImportTest) *kdvh.ImportConfig {
-	config := kdvh.ImportConfig{
+	return &kdvh.ImportConfig{
 		Tables:    []string{t.table},
 		Stations:  []string{fmt.Sprint(t.station)},
 		Elements:  []string{t.elem},
 		BaseDir:   "./tests",
 		HasHeader: true,
 		Sep:       ";",
+		StinfoMap: map[kdvh.StinfoKey]kdvh.StinfoParam{
+			{ElemCode: t.elem, TableName: t.table}: {
+				TypeID:   501,
+				ParamID:  212,
+				Hlevel:   nil,
+				Sensor:   0,
+				Fromtime: time.Date(2001, 7, 1, 9, 0, 0, 0, time.UTC),
+				IsScalar: true,
+			},
+		},
 	}
-
-	config.CacheMetadata()
-	return &config
-
 }
 
 type ImportTest struct {
@@ -37,15 +42,6 @@ type ImportTest struct {
 }
 
 func TestImportKDVH(t *testing.T) {
-	err := godotenv.Load()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	// TODO: could also define a smaller version just for tests
-	db := kdvh.KDVH
-
 	pool, err := pgxpool.New(context.TODO(), LARD_STRING)
 	if err != nil {
 		t.Log("Could not connect to Lard:", err)
@@ -58,7 +54,7 @@ func TestImportKDVH(t *testing.T) {
 
 	for _, c := range testCases {
 		config := mockConfig(&c)
-		table, ok := db[c.table]
+		table, ok := kdvh.KDVH[c.table]
 		if !ok {
 			t.Fatal("Table does not exist in database")
 		}
