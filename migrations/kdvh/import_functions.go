@@ -5,6 +5,8 @@ import (
 	"strconv"
 
 	"github.com/rickb777/period"
+
+	"migrate/lard"
 )
 
 // In kvalobs a flag is a 16 char string containg QC information about the observation:
@@ -231,19 +233,24 @@ const (
 	DIURNAL_INTERPOLATED_USEINFO = "48925" + DELAY_DEFAULT // Specific to T_DIURNAL_INTERPOLATED
 )
 
+// Work around to return reference to consts
+func addr[T any](t T) *T {
+	return &t
+}
+
 func (obs *KdvhObs) flagsAreValid() bool {
-	if len(obs.Flags) != 5 {
+	if len(obs.flags) != 5 {
 		return false
 	}
-	_, err := strconv.ParseInt(obs.Flags, 10, 32)
+	_, err := strconv.ParseInt(obs.flags, 10, 32)
 	return err == nil
 }
 
-func (obs *KdvhObs) Useinfo() string {
+func (obs *KdvhObs) Useinfo() *string {
 	if !obs.flagsAreValid() {
-		return INVALID_FLAGS
+		return addr(INVALID_FLAGS)
 	}
-	return obs.Flags + DELAY_DEFAULT
+	return addr(obs.flags + DELAY_DEFAULT)
 }
 
 // The following functions try to recover the original pair of `controlinfo`
@@ -251,57 +258,59 @@ func (obs *KdvhObs) Useinfo() string {
 // Different KDVH tables need different ways to perform this conversion.
 
 // Default ConvertFunction
-func Convert(obs KdvhObs) (LardObs, error) {
+// NOTE: this should be the only function that can return `lard.TextObs` with non-null text data.
+func Convert(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 	var valPtr *float32
 
 	controlinfo := VALUE_PASSED_QC
-	if obs.Data == "" {
+	if obs.data == "" {
 		controlinfo = VALUE_MISSING
 	}
 
-	// NOTE: this is the only function that can return `LardObs`
-	// with non-null text data
-	if !obs.param.IsScalar {
-		return LardObs{
-			Obstime:     obs.Obstime,
-			Text:        &obs.Data,
-			Useinfo:     obs.Useinfo(),
-			Controlinfo: controlinfo,
-		}, nil
-	}
-
-	val, err := strconv.ParseFloat(obs.Data, 32)
+	val, err := strconv.ParseFloat(obs.data, 32)
 	if err == nil {
 		f32 := float32(val)
 		valPtr = &f32
 	}
 
-	return LardObs{
-		Obstime:     obs.Obstime,
-		Data:        valPtr,
-		Useinfo:     obs.Useinfo(),
-		Controlinfo: controlinfo,
-	}, nil
+	return lard.DataObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Data:    valPtr,
+		},
+		lard.TextObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Text:    &obs.data,
+		},
+		lard.Flag{
+			Id:          obs.id,
+			Obstime:     obs.obstime,
+			Useinfo:     obs.Useinfo(),
+			Controlinfo: &controlinfo,
+		}, nil
 }
 
 // This function modifies obstimes to always use totime
 // This is needed because KDVH used incorrect and incosistent timestamps
-func ConvertProduct(obs KdvhObs) (LardObs, error) {
-	obsLard, err := Convert(obs)
+func ConvertProduct(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
+	data, text, flag, err := Convert(obs)
 	if !obs.offset.IsZero() {
-		if temp, ok := obs.offset.AddTo(obsLard.Obstime); ok {
-			obsLard.Obstime = temp
+		if temp, ok := obs.offset.AddTo(data.Obstime); ok {
+			data.Obstime = temp
+			text.Obstime = temp
+			flag.Obstime = temp
 		}
 	}
-	return obsLard, err
+	return data, text, flag, err
 }
 
-func ConvertEdata(obs KdvhObs) (LardObs, error) {
+func ConvertEdata(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 	var controlinfo string
 	var valPtr *float32
 
-	if val, err := strconv.ParseFloat(obs.Data, 32); err != nil {
-		switch obs.Flags {
+	if val, err := strconv.ParseFloat(obs.data, 32); err != nil {
+		switch obs.flags {
 		case "70381", "70389", "90989":
 			controlinfo = VALUE_REMOVED_BY_QC
 		default:
@@ -314,20 +323,30 @@ func ConvertEdata(obs KdvhObs) (LardObs, error) {
 		valPtr = &f32
 	}
 
-	return LardObs{
-		Obstime:     obs.Obstime,
-		Data:        valPtr,
-		Useinfo:     obs.Useinfo(),
-		Controlinfo: controlinfo,
-	}, nil
+	return lard.DataObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Data:    valPtr,
+		},
+		lard.TextObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Text:    &obs.data,
+		},
+		lard.Flag{
+			Id:          obs.id,
+			Obstime:     obs.obstime,
+			Useinfo:     obs.Useinfo(),
+			Controlinfo: &controlinfo,
+		}, nil
 }
 
-func ConvertPdata(obs KdvhObs) (LardObs, error) {
+func ConvertPdata(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 	var controlinfo string
 	var valPtr *float32
 
-	if val, err := strconv.ParseFloat(obs.Data, 32); err != nil {
-		switch obs.Flags {
+	if val, err := strconv.ParseFloat(obs.data, 32); err != nil {
+		switch obs.flags {
 		case "20389", "30389", "40389", "50383", "70381", "71381":
 			controlinfo = VALUE_REMOVED_BY_QC
 		default:
@@ -341,7 +360,7 @@ func ConvertPdata(obs KdvhObs) (LardObs, error) {
 		f32 := float32(val)
 		valPtr = &f32
 
-		switch obs.Flags {
+		switch obs.flags {
 		case "10319", "10329", "30319", "40319", "48929", "48999":
 			controlinfo = VALUE_MANUALLY_INTERPOLATED
 		case "20389", "30389", "40389", "50383", "70381", "71381", "99319":
@@ -355,20 +374,30 @@ func ConvertPdata(obs KdvhObs) (LardObs, error) {
 
 	}
 
-	return LardObs{
-		Obstime:     obs.Obstime,
-		Data:        valPtr,
-		Useinfo:     obs.Useinfo(),
-		Controlinfo: controlinfo,
-	}, nil
+	return lard.DataObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Data:    valPtr,
+		},
+		lard.TextObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Text:    &obs.data,
+		},
+		lard.Flag{
+			Id:          obs.id,
+			Obstime:     obs.obstime,
+			Useinfo:     obs.Useinfo(),
+			Controlinfo: &controlinfo,
+		}, nil
 }
 
-func ConvertNdata(obs KdvhObs) (LardObs, error) {
+func ConvertNdata(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 	var controlinfo string
 	var valPtr *float32
 
-	if val, err := strconv.ParseFloat(obs.Data, 32); err != nil {
-		switch obs.Flags {
+	if val, err := strconv.ParseFloat(obs.data, 32); err != nil {
+		switch obs.flags {
 		case "70389":
 			controlinfo = VALUE_REMOVED_BY_QC
 		default:
@@ -379,7 +408,7 @@ func ConvertNdata(obs KdvhObs) (LardObs, error) {
 			controlinfo = VALUE_MISSING
 		}
 	} else {
-		switch obs.Flags {
+		switch obs.flags {
 		case "43325", "48325":
 			controlinfo = VALUE_MANUALLY_ASSIGNED
 		case "30319", "38929", "40315", "40319":
@@ -396,27 +425,37 @@ func ConvertNdata(obs KdvhObs) (LardObs, error) {
 		valPtr = &f32
 	}
 
-	return LardObs{
-		Obstime:     obs.Obstime,
-		Data:        valPtr,
-		Useinfo:     obs.Useinfo(),
-		Controlinfo: controlinfo,
-	}, nil
+	return lard.DataObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Data:    valPtr,
+		},
+		lard.TextObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Text:    &obs.data,
+		},
+		lard.Flag{
+			Id:          obs.id,
+			Obstime:     obs.obstime,
+			Useinfo:     obs.Useinfo(),
+			Controlinfo: &controlinfo,
+		}, nil
 }
 
-func ConvertVdata(obs KdvhObs) (LardObs, error) {
+func ConvertVdata(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 	var useinfo, controlinfo string
 	var valPtr *float32
 
 	// set useinfo based on time
-	if h := obs.Obstime.Hour(); h == 0 || h == 6 || h == 12 || h == 18 {
+	if h := obs.obstime.Hour(); h == 0 || h == 6 || h == 12 || h == 18 {
 		useinfo = COMPLETED_HQC
 	} else {
 		useinfo = INVALID_FLAGS
 	}
 
 	// set data and controlinfo
-	if val, err := strconv.ParseFloat(obs.Data, 32); err != nil {
+	if val, err := strconv.ParseFloat(obs.data, 32); err != nil {
 		controlinfo = VALUE_MISSING
 	} else {
 		// super special treatment clause of T_VDATA.OT_24, so it will be the same as in kvalobs
@@ -426,14 +465,14 @@ func ConvertVdata(obs KdvhObs) (LardObs, error) {
 			// add custom offset, because OT_24 in KDVH has been treated differently than OT_24 in kvalobs
 			offset, err := period.Parse("PT18H") // fromtime_offset -PT6H, timespan P1D
 			if err != nil {
-				return LardObs{}, errors.New("could not parse period")
+				return lard.DataObs{}, lard.TextObs{}, lard.Flag{}, errors.New("could not parse period")
 			}
-			temp, ok := offset.AddTo(obs.Obstime)
+			temp, ok := offset.AddTo(obs.obstime)
 			if !ok {
-				return LardObs{}, errors.New("could not add period")
+				return lard.DataObs{}, lard.TextObs{}, lard.Flag{}, errors.New("could not add period")
 			}
 
-			obs.Obstime = temp
+			obs.obstime = temp
 			// convert from hours to minutes
 			f32 *= 60.0
 		}
@@ -441,27 +480,47 @@ func ConvertVdata(obs KdvhObs) (LardObs, error) {
 		controlinfo = VALUE_PASSED_QC
 	}
 
-	return LardObs{
-		Obstime:     obs.Obstime,
-		Data:        valPtr,
-		Useinfo:     useinfo,
-		Controlinfo: controlinfo,
-	}, nil
+	return lard.DataObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Data:    valPtr,
+		},
+		lard.TextObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Text:    &obs.data,
+		},
+		lard.Flag{
+			Id:          obs.id,
+			Obstime:     obs.obstime,
+			Useinfo:     &useinfo,
+			Controlinfo: &controlinfo,
+		}, nil
 }
 
 // Specific conversionfunction for diurnal interpolated,
 // with hardcoded useinfo and controlinfo
-func ConvertDiurnalInterpolated(obs KdvhObs) (LardObs, error) {
-	val, err := strconv.ParseFloat(obs.Data, 32)
+func ConvertDiurnalInterpolated(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
+	val, err := strconv.ParseFloat(obs.data, 32)
 	if err != nil {
-		return LardObs{}, err
+		return lard.DataObs{}, lard.TextObs{}, lard.Flag{}, err
 	}
 
 	f32 := float32(val)
-	return LardObs{
-		Obstime:     obs.Obstime,
-		Data:        &f32,
-		Useinfo:     DIURNAL_INTERPOLATED_USEINFO,
-		Controlinfo: VALUE_MANUALLY_INTERPOLATED,
-	}, nil
+	return lard.DataObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Data:    &f32,
+		},
+		lard.TextObs{
+			Id:      obs.id,
+			Obstime: obs.obstime,
+			Text:    &obs.data,
+		},
+		lard.Flag{
+			Id:          obs.id,
+			Obstime:     obs.obstime,
+			Useinfo:     addr(DIURNAL_INTERPOLATED_USEINFO),
+			Controlinfo: addr(VALUE_MANUALLY_INTERPOLATED),
+		}, nil
 }

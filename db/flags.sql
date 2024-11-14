@@ -15,13 +15,15 @@ CREATE TABLE IF NOT EXISTS flags.kvdata (
 CREATE INDEX IF NOT EXISTS kvdata_obtime_index ON flags.kvdata (obstime);
 CREATE INDEX IF NOT EXISTS kvdata_timeseries_index ON flags.kvdata USING HASH (timeseries); 
 
-CREATE TABLE IF NOT EXISTS flags.kdvh (
+CREATE TABLE IF NOT EXISTS flags.old_databases (
     timeseries INT4 REFERENCES public.timeseries,
     obstime TIMESTAMPTZ NOT NULL,
+    corrected REAL NULL,
     controlinfo TEXT NULL,
     useinfo TEXT NULL,
+    cfailed TEXT NULL ,
     CONSTRAINT unique_kdvh_timeseries_obstime UNIQUE (timeseries, obstime)
 );
 
-CREATE INDEX IF NOT EXISTS kdvh_obtime_index ON flags.kdvh (obstime);
-CREATE INDEX IF NOT EXISTS kdvh_timeseries_index ON flags.kdvh USING HASH (timeseries); 
+CREATE INDEX IF NOT EXISTS kdvh_obtime_index ON flags.old_databases (obstime);
+CREATE INDEX IF NOT EXISTS kdvh_timeseries_index ON flags.old_databases USING HASH (timeseries); 

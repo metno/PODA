@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"migrate/lard"
 	"time"
 
 	"github.com/rickb777/period"
@@ -48,12 +49,14 @@ type DumpMeta struct {
 }
 
 // Implementation of these functions can be found in `import_functions.go`
-type ConvertFunction func(KdvhObs) (LardObs, error)
+// It returns three structs for each of the lard tables we are inserting into
+type ConvertFunction func(KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error)
 type KdvhObs struct {
 	*TimeseriesInfo
-	Obstime time.Time
-	Data    string
-	Flags   string
+	id      int32
+	obstime time.Time
+	data    string
+	flags   string
 }
 
 // Convenience struct that holds information for a specific timeseries
