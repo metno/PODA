@@ -64,3 +64,21 @@ jobs:
 
       - name: Run unit and integration tests
         run: cargo test --no-fail-fast -- --nocapture --test-threads=1
+
+      - name: Setup Go 1.22.x
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          cache-dependency-path: migrations/go.sum
+
+      - name: Install Go dependencies
+        working-directory: migrations
+        run: go get
+
+      - name: Build migration package
+        working-directory: migrations
+        run: go build -v ./...
+
+      - name: Run Go tests
+        working-directory: migrations
+        run: go test -v ./...
