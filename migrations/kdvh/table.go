@@ -47,6 +47,7 @@ type DumpMeta struct {
 	logStr    string
 }
 
+// Implementation of these functions can be found in `import_functions.go`
 type ConvertFunction func(KdvhObs) (LardObs, error)
 type KdvhObs struct {
 	*TimeseriesInfo
@@ -100,7 +101,7 @@ func NewTable(data, flag, elem string) *Table {
 		ElemTableName: elem,
 		Path:          data + "_combined", // NOTE: '_combined' kept for backward compatibility with original scripts
 		dumpFunc:      dumpDataAndFlags,
-		convFunc:      makeDataPage,
+		convFunc:      Convert,
 	}
 }
 
