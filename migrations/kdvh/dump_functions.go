@@ -1,6 +1,7 @@
 package kdvh
 
 import (
+	"context"
 	"database/sql"
 	"encoding/csv"
 	"errors"
@@ -12,6 +13,9 @@ import (
 	"slices"
 	"strconv"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Format string for date field in CSV files
@@ -22,9 +26,9 @@ var EMPTY_QUERY_ERR error = errors.New("The query did not return any rows")
 
 // Struct representing a single record in the output CSV file
 type Record struct {
-	time time.Time
-	data sql.NullString
-	flag sql.NullString
+	Time time.Time      `db:"time"`
+	Data sql.NullString `db:"data"`
+	Flag sql.NullString `db:"flag"`
 }
 
 func fileExists(filename string, overwrite bool) error {
@@ -39,11 +43,11 @@ func fileExists(filename string, overwrite bool) error {
 }
 
 // Helper function for dumpByYear functinos Fetch min and max year from table, needed for tables that are dumped by year
-func fetchYearRange(tableName, station string, conn *sql.DB) (int64, int64, error) {
+func fetchYearRange(tableName, station string, pool *pgxpool.Pool) (int64, int64, error) {
 	var beginStr, endStr string
 	query := fmt.Sprintf("SELECT min(to_char(dato, 'yyyy')), max(to_char(dato, 'yyyy')) FROM %s WHERE stnr = $1", tableName)
 
-	if err := conn.QueryRow(query, station).Scan(&beginStr, &endStr); err != nil {
+	if err := pool.QueryRow(context.TODO(), query, station).Scan(&beginStr, &endStr); err != nil {
 		return 0, 0, fmt.Errorf("Could not query row: %v", err)
 	}
 
@@ -62,13 +66,13 @@ func fetchYearRange(tableName, station string, conn *sql.DB) (int64, int64, erro
 
 // This function is used when the table contains large amount of data
 // (T_SECOND, T_MINUTE, T_10MINUTE)
-func dumpByYear(path string, meta DumpMeta, conn *sql.DB) error {
-	dataBegin, dataEnd, err := fetchYearRange(meta.dataTable, meta.station, conn)
+func dumpByYear(path string, meta DumpMeta, pool *pgxpool.Pool) error {
+	dataBegin, dataEnd, err := fetchYearRange(meta.dataTable, meta.station, pool)
 	if err != nil {
 		return err
 	}
 
-	flagBegin, flagEnd, err := fetchYearRange(meta.flagTable, meta.station, conn)
+	flagBegin, flagEnd, err := fetchYearRange(meta.flagTable, meta.station, pool)
 	if err != nil {
 		return err
 	}
@@ -106,7 +110,7 @@ func dumpByYear(path string, meta DumpMeta, conn *sql.DB) error {
 			continue
 		}
 
-		rows, err := conn.Query(query, meta.station, year)
+		rows, err := pool.Query(context.TODO(), query, meta.station, year)
 		if err != nil {
 			slog.Error(meta.logStr + fmt.Sprint("Could not query KDVH: ", err))
 			continue
@@ -127,7 +131,7 @@ func dumpByYear(path string, meta DumpMeta, conn *sql.DB) error {
 //   - RR (hourly precipitations, note that in Stinfosys this parameter is 'RR_1')
 //
 // We calculate the other data on the fly (outside this program) if needed.
-func dumpHomogenMonth(path string, meta DumpMeta, conn *sql.DB) error {
+func dumpHomogenMonth(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
 		slog.Warn(meta.logStr + err.Error())
@@ -141,7 +145,7 @@ func dumpHomogenMonth(path string, meta DumpMeta, conn *sql.DB) error {
 		meta.element, "",
 	)
 
-	rows, err := conn.Query(query, meta.station)
+	rows, err := pool.Query(context.TODO(), query, meta.station)
 	if err != nil {
 		slog.Error(meta.logStr + err.Error())
 		return err
@@ -157,7 +161,7 @@ func dumpHomogenMonth(path string, meta DumpMeta, conn *sql.DB) error {
 
 // This function is used to dump tables that don't have a FLAG table,
 // (T_METARDATA, T_HOMOGEN_DIURNAL)
-func dumpDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
+func dumpDataOnly(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
 		slog.Warn(meta.logStr + err.Error())
@@ -171,7 +175,7 @@ func dumpDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
 		meta.dataTable,
 	)
 
-	rows, err := conn.Query(query, meta.station)
+	rows, err := pool.Query(context.TODO(), query, meta.station)
 	if err != nil {
 		slog.Error(meta.logStr + err.Error())
 		return err
@@ -188,7 +192,7 @@ func dumpDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
 // This is the default dump function.
 // It selects both data and flag tables for a specific (station, element) pair,
 // and then performs a full outer join on the two subqueries
-func dumpDataAndFlags(path string, meta DumpMeta, conn *sql.DB) error {
+func dumpDataAndFlags(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
 		slog.Warn(meta.logStr + err.Error())
@@ -210,7 +214,7 @@ func dumpDataAndFlags(path string, meta DumpMeta, conn *sql.DB) error {
 		meta.flagTable,
 	)
 
-	rows, err := conn.Query(query, meta.station)
+	rows, err := pool.Query(context.TODO(), query, meta.station)
 	if err != nil {
 		slog.Error(meta.logStr + err.Error())
 		return err
@@ -227,7 +231,7 @@ func dumpDataAndFlags(path string, meta DumpMeta, conn *sql.DB) error {
 }
 
 // Dumps queried rows to file
-func dumpToFile(filename string, rows *sql.Rows) error {
+func dumpToFile(filename string, rows pgx.Rows) error {
 	lines, err := sortRows(rows)
 	if err != nil {
 		return err
@@ -251,22 +255,16 @@ func dumpToFile(filename string, rows *sql.Rows) error {
 }
 
 // Scans the rows and collects them in a slice of chronologically sorted lines
-func sortRows(rows *sql.Rows) ([]Record, error) {
+func sortRows(rows pgx.Rows) ([]Record, error) {
 	defer rows.Close()
 
-	// TODO: if we use pgx we might be able to preallocate the right size
-	var records []Record
-	var record Record
-
-	for rows.Next() {
-		if err := rows.Scan(&record.time, &record.data, &record.flag); err != nil {
-			return nil, errors.New("Could not scan rows: " + err.Error())
-		}
-		records = append(records, record)
+	records, err := pgx.CollectRows(rows, pgx.RowToStructByName[Record])
+	if err != nil {
+		return nil, errors.New("Could not collect rows: " + err.Error())
 	}
 
 	slices.SortFunc(records, func(a, b Record) int {
-		return a.time.Compare(b.time)
+		return a.Time.Compare(b.Time)
 	})
 
 	return records, rows.Err()
@@ -281,9 +279,9 @@ func writeElementFile(lines []Record, file io.Writer) error {
 
 	record := make([]string, 3)
 	for _, l := range lines {
-		record[0] = l.time.Format(TIMEFORMAT)
-		record[1] = l.data.String
-		record[2] = l.flag.String
+		record[0] = l.Time.Format(TIMEFORMAT)
+		record[1] = l.Data.String
+		record[2] = l.Flag.String
 
 		if err := writer.Write(record); err != nil {
 			return errors.New("Could not write to file: " + err.Error())
