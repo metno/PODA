@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
@@ -24,6 +25,7 @@ type DumpConfig struct {
 	Elements  []string `short:"e" delimiter:"," long:"elem" default:"" description:"Optional comma separated list of element codes. By default all element codes are processed"`
 	Overwrite bool     `long:"overwrite" description:"Overwrite any existing dumped files"`
 	Email     []string `long:"email" delimiter:"," description:"Optional comma separated list of email addresses used to notify if the program crashed"`
+	MaxConn   int      `long:"conns" default:"10" description:"Max number of concurrent connections allowed"`
 }
 
 func (config *DumpConfig) Execute([]string) error {
@@ -64,8 +66,10 @@ func (table *Table) Dump(conn *sql.DB, config *DumpConfig) {
 		return
 	}
 
-	bar := utils.NewBar(len(stations), table.TableName)
+	// Used to limit connections to the database
+	semaphore := make(chan struct{}, config.MaxConn)
 
+	bar := utils.NewBar(len(stations), table.TableName)
 	bar.RenderBlank()
 	for _, station := range stations {
 		path := filepath.Join(table.Path, string(station))
@@ -74,25 +78,37 @@ func (table *Table) Dump(conn *sql.DB, config *DumpConfig) {
 			return
 		}
 
+		var wg sync.WaitGroup
 		for _, element := range elements {
-			err := table.dumpFunc(
-				path,
-				DumpMeta{
-					element:   element,
-					station:   station,
-					dataTable: table.TableName,
-					flagTable: table.FlagTableName,
-					overwrite: config.Overwrite,
-				},
-				conn,
-			)
+			// This blocks if the channel is full
+			semaphore <- struct{}{}
 
-			// NOTE: Non-nil errors are logged inside each DumpFunc
-			if err == nil {
-				slog.Info(fmt.Sprintf("%s - %s - %s: dumped successfully", table.TableName, station, element))
-			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				err := table.dumpFunc(
+					path,
+					DumpMeta{
+						element:   element,
+						station:   station,
+						dataTable: table.TableName,
+						flagTable: table.FlagTableName,
+						overwrite: config.Overwrite,
+					},
+					conn,
+				)
+
+				// NOTE: Non-nil errors are logged inside each DumpFunc
+				if err == nil {
+					slog.Info(fmt.Sprintf("%s - %s - %s: dumped successfully", table.TableName, station, element))
+				}
+
+				// Release semaphore
+				<-semaphore
+			}()
 		}
-
+		wg.Wait()
 		bar.Add(1)
 	}
 }
