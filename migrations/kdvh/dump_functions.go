@@ -60,49 +60,8 @@ func fetchYearRange(tableName, station string, conn *sql.DB) (int64, int64, erro
 	return begin, end, nil
 }
 
-func dumpByYearDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
-	begin, end, err := fetchYearRange(meta.dataTable, meta.station, conn)
-	if err != nil {
-		slog.Error(meta.logStr + err.Error())
-		return err
-	}
-
-	query := fmt.Sprintf(
-		`SELECT dato AS time, %[1]s AS data, '' AS flag FROM %[2]s 
-        WHERE %[1]s IS NOT NULL
-        AND stnr = $1 AND TO_CHAR(dato, 'yyyy') = $2`,
-		meta.element,
-		meta.dataTable,
-	)
-
-	for year := begin; year < end; year++ {
-		yearPath := filepath.Join(path, fmt.Sprint(year))
-		if err := os.MkdirAll(yearPath, os.ModePerm); err != nil {
-			slog.Error(meta.logStr + err.Error())
-			continue
-		}
-
-		filename := filepath.Join(yearPath, meta.element+".csv")
-		if err := fileExists(filename, meta.overwrite); err != nil {
-			slog.Warn(meta.logStr + err.Error())
-			continue
-		}
-
-		rows, err := conn.Query(query, meta.station, year)
-		if err != nil {
-			slog.Error(meta.logStr + fmt.Sprint("Could not query KDVH: ", err))
-			continue
-		}
-
-		if err := dumpToFile(filename, rows); err != nil {
-			slog.Error(meta.logStr + err.Error())
-			continue
-		}
-	}
-
-	return nil
-}
-
+// This function is used when the table contains large amount of data
+// (T_SECOND, T_MINUTE, T_10MINUTE)
 func dumpByYear(path string, meta DumpMeta, conn *sql.DB) error {
 	dataBegin, dataEnd, err := fetchYearRange(meta.dataTable, meta.station, conn)
 	if err != nil {
@@ -196,6 +155,8 @@ func dumpHomogenMonth(path string, meta DumpMeta, conn *sql.DB) error {
 	return nil
 }
 
+// This function is used to dump tables that don't have a FLAG table,
+// (T_METARDATA, T_HOMOGEN_DIURNAL)
 func dumpDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
@@ -224,6 +185,9 @@ func dumpDataOnly(path string, meta DumpMeta, conn *sql.DB) error {
 	return nil
 }
 
+// This is the default dump function.
+// It selects both data and flag tables for a specific (station, element) pair,
+// and then performs a full outer join on the two subqueries
 func dumpDataAndFlags(path string, meta DumpMeta, conn *sql.DB) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
@@ -262,6 +226,7 @@ func dumpDataAndFlags(path string, meta DumpMeta, conn *sql.DB) error {
 	return nil
 }
 
+// Dumps queried rows to file
 func dumpToFile(filename string, rows *sql.Rows) error {
 	lines, err := sortRows(rows)
 	if err != nil {
