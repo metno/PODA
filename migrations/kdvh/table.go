@@ -36,6 +36,7 @@ type Table struct {
 	importUntil   int             // Import data only until the year specified by this field. If this field is not explicitly set, table import is skipped.
 }
 
+// Implementation of these functions can be found in `dump_functions.go`
 type DumpFunction func(path string, meta DumpMeta, conn *sql.DB) error
 type DumpMeta struct {
 	element   string
