@@ -38,7 +38,7 @@ func FilterSlice[T comparable](slice, reference []T, formatMsg string) []T {
 	}
 
 	if formatMsg == "" {
-		formatMsg = "User input '%s' not present in reference, skipping"
+		formatMsg = "Value '%s' not present in reference slice, skipping"
 	}
 
 	// I hate this so much
