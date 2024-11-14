@@ -1,7 +1,7 @@
 package kdvh
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,7 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"migrate/utils"
 )
@@ -29,7 +30,7 @@ type DumpConfig struct {
 }
 
 func (config *DumpConfig) Execute([]string) error {
-	conn, err := sql.Open("pgx", os.Getenv("KDVH_PROXY_CONN"))
+	pool, err := pgxpool.New(context.Background(), os.Getenv("KDVH_PROXY_CONN"))
 	if err != nil {
 		slog.Error(err.Error())
 		return nil
@@ -39,13 +40,13 @@ func (config *DumpConfig) Execute([]string) error {
 		if config.Tables != nil && !slices.Contains(config.Tables, table.TableName) {
 			continue
 		}
-		table.Dump(conn, config)
+		table.Dump(pool, config)
 	}
 
 	return nil
 }
 
-func (table *Table) Dump(conn *sql.DB, config *DumpConfig) {
+func (table *Table) Dump(pool *pgxpool.Pool, config *DumpConfig) {
 	defer utils.SendEmailOnPanic(fmt.Sprintf("%s dump", table.TableName), config.Email)
 
 	table.Path = filepath.Join(config.BaseDir, table.Path)
@@ -56,12 +57,12 @@ func (table *Table) Dump(conn *sql.DB, config *DumpConfig) {
 
 	utils.SetLogFile(table.TableName, "dump")
 
-	elements, err := table.getElements(conn, config)
+	elements, err := table.getElements(pool, config)
 	if err != nil {
 		return
 	}
 
-	stations, err := table.getStations(conn, config)
+	stations, err := table.getStations(pool, config)
 	if err != nil {
 		return
 	}
@@ -96,7 +97,7 @@ func (table *Table) Dump(conn *sql.DB, config *DumpConfig) {
 						flagTable: table.FlagTableName,
 						overwrite: config.Overwrite,
 					},
-					conn,
+					pool,
 				)
 
 				// NOTE: Non-nil errors are logged inside each DumpFunc
@@ -114,8 +115,8 @@ func (table *Table) Dump(conn *sql.DB, config *DumpConfig) {
 }
 
 // Fetches elements and filters them based on user input
-func (table *Table) getElements(conn *sql.DB, config *DumpConfig) ([]string, error) {
-	elements, err := table.fetchElements(conn)
+func (table *Table) getElements(pool *pgxpool.Pool, config *DumpConfig) ([]string, error) {
+	elements, err := table.fetchElements(pool)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +133,7 @@ func (table *Table) getElements(conn *sql.DB, config *DumpConfig) ([]string, err
 // Fetch column names for a given table
 // We skip the columns defined in INVALID_COLUMNS and all columns that contain the 'kopi' string
 // TODO: should we dump these invalid/kopi elements even if we are not importing them?
-func (table *Table) fetchElements(conn *sql.DB) (elements []string, err error) {
+func (table *Table) fetchElements(pool *pgxpool.Pool) (elements []string, err error) {
 	slog.Info(fmt.Sprintf("Fetching elements for %s...", table.TableName))
 
 	// NOTE: T_HOMOGEN_MONTH is a special case, refer to `dumpHomogenMonth` in
@@ -141,7 +142,8 @@ func (table *Table) fetchElements(conn *sql.DB) (elements []string, err error) {
 		return []string{"rr", "tam"}, nil
 	}
 
-	rows, err := conn.Query(
+	rows, err := pool.Query(
+		context.TODO(),
 		`SELECT column_name FROM information_schema.columns
             WHERE table_name = $1
             AND NOT column_name = ANY($2::text[])
@@ -168,8 +170,8 @@ func (table *Table) fetchElements(conn *sql.DB) (elements []string, err error) {
 }
 
 // Fetches station numbers and filters them based on user input
-func (table *Table) getStations(conn *sql.DB, config *DumpConfig) ([]string, error) {
-	stations, err := table.fetchStnrFromElemTable(conn)
+func (table *Table) getStations(pool *pgxpool.Pool, config *DumpConfig) ([]string, error) {
+	stations, err := table.fetchStnrFromElemTable(pool)
 	if err != nil {
 		return nil, err
 	}
@@ -179,16 +181,16 @@ func (table *Table) getStations(conn *sql.DB, config *DumpConfig) ([]string, err
 }
 
 // This function uses the ELEM table to fetch the station numbers
-func (table *Table) fetchStnrFromElemTable(conn *sql.DB) (stations []string, err error) {
+func (table *Table) fetchStnrFromElemTable(pool *pgxpool.Pool) (stations []string, err error) {
 	slog.Info(fmt.Sprint("Fetching station numbers..."))
 
-	var rows *sql.Rows
+	var rows pgx.Rows
 	if table.ElemTableName == "T_ELEM_OBS" {
 		query := `SELECT DISTINCT stnr FROM t_elem_obs WHERE table_name = $1`
-		rows, err = conn.Query(query, table.TableName)
+		rows, err = pool.Query(context.TODO(), query, table.TableName)
 	} else {
 		query := fmt.Sprintf("SELECT DISTINCT stnr FROM %s", strings.ToLower(table.ElemTableName))
-		rows, err = conn.Query(query)
+		rows, err = pool.Query(context.TODO(), query)
 	}
 
 	if err != nil {

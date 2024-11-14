@@ -1,13 +1,13 @@
 package kdvh
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"migrate/lard"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rickb777/period"
 )
 
@@ -38,7 +38,7 @@ type Table struct {
 }
 
 // Implementation of these functions can be found in `dump_functions.go`
-type DumpFunction func(path string, meta DumpMeta, conn *sql.DB) error
+type DumpFunction func(path string, meta DumpMeta, pool *pgxpool.Pool) error
 type DumpMeta struct {
 	element   string
 	station   string
