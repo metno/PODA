@@ -1,10 +1,14 @@
 package cache
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rickb777/period"
 
@@ -12,20 +16,38 @@ import (
 )
 
 type Cache struct {
-	OffsetMap OffsetMap
-	StinfoMap StinfoMap
-	KDVHMap   KDVHMap
+	Offsets        OffsetMap
+	Stinfo         StinfoMap
+	KDVH           KDVHMap
+	ParamPermits   ParamPermitMap
+	StationPermits StationPermitMap
 }
-
-// TODO: cache permissions
 
 // Caches all the metadata needed for import.
 // If any error occurs inside here the program will exit.
 func CacheMetadata(tables, stations, elements []string) *Cache {
+	fmt.Println("Connecting to Stinfosys to cache metadata")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	conn, err := pgx.Connect(ctx, os.Getenv("STINFO_STRING"))
+	if err != nil {
+		slog.Error("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
+		os.Exit(1)
+	}
+
+	stinfoMeta := cacheStinfoMeta(tables, elements, conn)
+	stationPermits := cacheStationPermits(conn)
+	paramPermits := cacheParamPermits(conn)
+
+	conn.Close(context.TODO())
+
 	return &Cache{
-		OffsetMap: cacheParamOffsets(),
-		StinfoMap: cacheStinfo(tables, elements),
-		KDVHMap:   cacheKDVH(tables, stations, elements),
+		Stinfo:         stinfoMeta,
+		StationPermits: stationPermits,
+		ParamPermits:   paramPermits,
+		Offsets:        cacheParamOffsets(),
+		KDVH:           cacheKDVH(tables, stations, elements),
 	}
 }
 
@@ -44,7 +66,7 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 	logstr := fmt.Sprintf("%v - %v - %v: ", table, station, element)
 	key := newKDVHKey(element, table, station)
 
-	param, ok := cache.StinfoMap[key.Inner]
+	param, ok := cache.Stinfo[key.Inner]
 	if !ok {
 		// TODO: should it fail here? How do we deal with data without metadata?
 		slog.Error(logstr + "Missing metadata in Stinfosys")
@@ -52,10 +74,10 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 	}
 
 	// No need to check for `!ok`, will default to 0 offset
-	offset := cache.OffsetMap[key.Inner]
+	offset := cache.Offsets[key.Inner]
 
 	// No need to check for `!ok`, timespan will be ignored if not in the map
-	span := cache.KDVHMap[key]
+	span := cache.KDVH[key]
 
 	label := lard.Label{
 		StationID: station,
@@ -69,6 +91,8 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 		slog.Error(logstr + "could not obtain timeseries - " + err.Error())
 		return nil, err
 	}
+
+	// TODO: check if station is restricted
 
 	return &TsInfo{
 		Id:      tsid,
