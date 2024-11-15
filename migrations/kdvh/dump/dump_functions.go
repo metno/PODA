@@ -1,34 +1,57 @@
-package kdvh
+package dump
 
 import (
 	"context"
-	"database/sql"
-	"encoding/csv"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
-	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"migrate/kdvh/db"
 )
 
-// Format string for date field in CSV files
-const TIMEFORMAT string = "2006-01-02_15:04:05"
+// Function used to dump the KDVH table, see below
+type DumpFunction func(path string, meta DumpArgs, pool *pgxpool.Pool) error
+type DumpArgs struct {
+	element   string
+	station   string
+	dataTable string
+	flagTable string
+	overwrite bool
+	logStr    string
+}
 
-// Error returned if no observations are found for a (station, element) pair
-var EMPTY_QUERY_ERR error = errors.New("The query did not return any rows")
+// var DUMP_MAP map[string]DumpFunction = map[string]DumpFunction{
+// 	"T_METARDATA":       dumpDataOnly,
+// 	"T_HOMOGEN_DIURNAL": dumpDataOnly,
+// 	"T_SECOND_DATA":     dumpByYear,
+// 	"T_MINUTE_DATA":     dumpByYear,
+// 	"T_10MINUTE_DATA":   dumpByYear,
+// 	"T_HOMOGEN_MONTH":   dumpHomogenMonth,
+// }
 
-// Struct representing a single record in the output CSV file
-type Record struct {
-	Time time.Time      `db:"time"`
-	Data sql.NullString `db:"data"`
-	Flag sql.NullString `db:"flag"`
+// func DumpFunc(table *db.Table) DumpFunction {
+// 	fn, ok := DUMP_MAP[table.TableName]
+// 	if !ok {
+// 		return dumpDataAndFlags
+// 	}
+// 	return fn
+// }
+
+func DumpFunc(table *db.Table) DumpFunction {
+	switch table.TableName {
+	case "T_METARDATA", "T_HOMOGEN_DIURNAL":
+		return dumpDataOnly
+	case "T_SECOND_DATA", "T_MINUTE_DATA", "T_10MINUTE_DATA":
+		return dumpByYear
+	case "T_HOMOGEN_MONTH":
+		return dumpHomogenMonth
+	}
+	return dumpDataAndFlags
 }
 
 func fileExists(filename string, overwrite bool) error {
@@ -66,7 +89,7 @@ func fetchYearRange(tableName, station string, pool *pgxpool.Pool) (int64, int64
 
 // This function is used when the table contains large amount of data
 // (T_SECOND, T_MINUTE, T_10MINUTE)
-func dumpByYear(path string, meta DumpMeta, pool *pgxpool.Pool) error {
+func dumpByYear(path string, meta DumpArgs, pool *pgxpool.Pool) error {
 	dataBegin, dataEnd, err := fetchYearRange(meta.dataTable, meta.station, pool)
 	if err != nil {
 		return err
@@ -116,7 +139,7 @@ func dumpByYear(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 			continue
 		}
 
-		if err := dumpToFile(filename, rows); err != nil {
+		if err := writeToCsv(filename, rows); err != nil {
 			slog.Error(meta.logStr + err.Error())
 			continue
 		}
@@ -131,7 +154,7 @@ func dumpByYear(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 //   - RR (hourly precipitations, note that in Stinfosys this parameter is 'RR_1')
 //
 // We calculate the other data on the fly (outside this program) if needed.
-func dumpHomogenMonth(path string, meta DumpMeta, pool *pgxpool.Pool) error {
+func dumpHomogenMonth(path string, meta DumpArgs, pool *pgxpool.Pool) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
 		slog.Warn(meta.logStr + err.Error())
@@ -151,7 +174,7 @@ func dumpHomogenMonth(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 		return err
 	}
 
-	if err := dumpToFile(filename, rows); err != nil {
+	if err := writeToCsv(filename, rows); err != nil {
 		slog.Error(meta.logStr + err.Error())
 		return err
 	}
@@ -161,7 +184,7 @@ func dumpHomogenMonth(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 
 // This function is used to dump tables that don't have a FLAG table,
 // (T_METARDATA, T_HOMOGEN_DIURNAL)
-func dumpDataOnly(path string, meta DumpMeta, pool *pgxpool.Pool) error {
+func dumpDataOnly(path string, meta DumpArgs, pool *pgxpool.Pool) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
 		slog.Warn(meta.logStr + err.Error())
@@ -181,7 +204,7 @@ func dumpDataOnly(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 		return err
 	}
 
-	if err := dumpToFile(filename, rows); err != nil {
+	if err := writeToCsv(filename, rows); err != nil {
 		slog.Error(meta.logStr + err.Error())
 		return err
 	}
@@ -192,7 +215,7 @@ func dumpDataOnly(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 // This is the default dump function.
 // It selects both data and flag tables for a specific (station, element) pair,
 // and then performs a full outer join on the two subqueries
-func dumpDataAndFlags(path string, meta DumpMeta, pool *pgxpool.Pool) error {
+func dumpDataAndFlags(path string, meta DumpArgs, pool *pgxpool.Pool) error {
 	filename := filepath.Join(path, meta.element+".csv")
 	if err := fileExists(filename, meta.overwrite); err != nil {
 		slog.Warn(meta.logStr + err.Error())
@@ -220,7 +243,7 @@ func dumpDataAndFlags(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 		return err
 	}
 
-	if err := dumpToFile(filename, rows); err != nil {
+	if err := writeToCsv(filename, rows); err != nil {
 		if !errors.Is(err, EMPTY_QUERY_ERR) {
 			slog.Error(meta.logStr + err.Error())
 		}
@@ -228,66 +251,4 @@ func dumpDataAndFlags(path string, meta DumpMeta, pool *pgxpool.Pool) error {
 	}
 
 	return nil
-}
-
-// Dumps queried rows to file
-func dumpToFile(filename string, rows pgx.Rows) error {
-	lines, err := sortRows(rows)
-	if err != nil {
-		return err
-	}
-
-	// Return if query was empty
-	if len(lines) == 0 {
-		return EMPTY_QUERY_ERR
-	}
-
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-
-	err = writeElementFile(lines, file)
-	if closeErr := file.Close(); closeErr != nil {
-		return errors.Join(err, closeErr)
-	}
-	return err
-}
-
-// Scans the rows and collects them in a slice of chronologically sorted lines
-func sortRows(rows pgx.Rows) ([]Record, error) {
-	defer rows.Close()
-
-	records, err := pgx.CollectRows(rows, pgx.RowToStructByName[Record])
-	if err != nil {
-		return nil, errors.New("Could not collect rows: " + err.Error())
-	}
-
-	slices.SortFunc(records, func(a, b Record) int {
-		return a.Time.Compare(b.Time)
-	})
-
-	return records, rows.Err()
-}
-
-// Writes queried (time | data | flag) columns to CSV
-func writeElementFile(lines []Record, file io.Writer) error {
-	// Write number of lines as header
-	file.Write([]byte(fmt.Sprintf("%v\n", len(lines))))
-
-	writer := csv.NewWriter(file)
-
-	record := make([]string, 3)
-	for _, l := range lines {
-		record[0] = l.Time.Format(TIMEFORMAT)
-		record[1] = l.Data.String
-		record[2] = l.Flag.String
-
-		if err := writer.Write(record); err != nil {
-			return errors.New("Could not write to file: " + err.Error())
-		}
-	}
-
-	writer.Flush()
-	return writer.Error()
 }

@@ -63,8 +63,8 @@ func SaveToFile(values []string, filename string) error {
 	return file.Close()
 }
 
-func SetLogFile(tableName, procedure string) {
-	filename := fmt.Sprintf("%s_%s_log.txt", tableName, procedure)
+func SetLogFile(table, procedure string) {
+	filename := fmt.Sprintf("%s_%s_log.txt", table, procedure)
 	fh, err := os.Create(filename)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Could not create log '%s': %s", filename, err))
