@@ -33,7 +33,7 @@ func (t *ImportTest) mockConfig() (*port.Config, *cache.Cache) {
 			Sep:       ";",
 		},
 		&cache.Cache{
-			StinfoMap: cache.StinfoMap{
+			Stinfo: cache.StinfoMap{
 				{ElemCode: t.elem, TableName: t.table}: {
 					Fromtime: time.Date(2001, 7, 1, 9, 0, 0, 0, time.UTC),
 					IsScalar: true,

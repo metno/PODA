@@ -2,7 +2,6 @@ package cache
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"slices"
@@ -22,7 +21,7 @@ type StinfoKey struct {
 	TableName string
 }
 
-// Subset of StinfoQuery with only param info
+// Subset of elem_map_cfnames_param query with only param info
 type StinfoParam struct {
 	TypeID   int32
 	ParamID  int32
@@ -32,46 +31,9 @@ type StinfoParam struct {
 	IsScalar bool
 }
 
-// Struct holding query from Stinfosys elem_map_cfnames_param
-type StinfoQuery struct {
-	ElemCode  string    `db:"elem_code"`
-	TableName string    `db:"table_name"`
-	TypeID    int32     `db:"typeid"`
-	ParamID   int32     `db:"paramid"`
-	Hlevel    *int32    `db:"hlevel"`
-	Sensor    int32     `db:"sensor"`
-	Fromtime  time.Time `db:"fromtime"`
-	IsScalar  bool      `db:"scalar"`
-}
-
-func (q *StinfoQuery) toParam() StinfoParam {
-	return StinfoParam{
-		TypeID:   q.TypeID,
-		ParamID:  q.ParamID,
-		Hlevel:   q.Hlevel,
-		Sensor:   q.Sensor,
-		Fromtime: q.Fromtime,
-		IsScalar: q.IsScalar,
-	}
-}
-func (q *StinfoQuery) toKey() StinfoKey {
-	return StinfoKey{q.ElemCode, q.TableName}
-}
-
 // Save metadata for later use by quering Stinfosys
-func cacheStinfo(tables, elements []string) StinfoMap {
+func cacheStinfoMeta(tables, elements []string, conn *pgx.Conn) StinfoMap {
 	cache := make(StinfoMap)
-
-	fmt.Println("Connecting to Stinfosys to cache metadata")
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	conn, err := pgx.Connect(ctx, os.Getenv("STINFO_STRING"))
-	if err != nil {
-		slog.Error("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
-		os.Exit(1)
-	}
-	defer conn.Close(context.TODO())
 
 	for _, table := range db.KDVH {
 		if tables != nil && !slices.Contains(tables, table.TableName) {
@@ -90,14 +52,30 @@ func cacheStinfo(tables, elements []string) StinfoMap {
 			os.Exit(1)
 		}
 
-		metas, err := pgx.CollectRows(rows, pgx.RowToStructByName[StinfoQuery])
-		if err != nil {
-			slog.Error(err.Error())
-			os.Exit(1)
+		for rows.Next() {
+			var key StinfoKey
+			var param StinfoParam
+			err := rows.Scan(
+				&key.ElemCode,
+				&key.TableName,
+				&param.TypeID,
+				&param.ParamID,
+				&param.Hlevel,
+				&param.Sensor,
+				&param.Fromtime,
+				&param.IsScalar,
+			)
+			if err != nil {
+				slog.Error(err.Error())
+				os.Exit(1)
+			}
+
+			cache[key] = param
 		}
 
-		for _, meta := range metas {
-			cache[meta.toKey()] = meta.toParam()
+		if rows.Err() != nil {
+			slog.Error(rows.Err().Error())
+			os.Exit(1)
 		}
 	}
 

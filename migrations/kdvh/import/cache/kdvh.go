@@ -32,23 +32,6 @@ type Timespan struct {
 	ToTime   *time.Time `db:"tdato"`
 }
 
-// Struct used to deserialize KDVH query in cacheKDVH
-type MetaKDVH struct {
-	ElemCode  string     `db:"elem_code"`
-	TableName string     `db:"table_name"`
-	Station   int32      `db:"stnr"`
-	FromTime  *time.Time `db:"fdato"`
-	ToTime    *time.Time `db:"tdato"`
-}
-
-func (m *MetaKDVH) toTimespan() Timespan {
-	return Timespan{m.FromTime, m.ToTime}
-}
-
-func (m *MetaKDVH) toKey() KDVHKey {
-	return KDVHKey{StinfoKey{ElemCode: m.ElemCode, TableName: m.TableName}, m.Station}
-}
-
 func cacheKDVH(tables, stations, elements []string) KDVHMap {
 	cache := make(KDVHMap)
 
@@ -82,15 +65,30 @@ func cacheKDVH(tables, stations, elements []string) KDVHMap {
 			os.Exit(1)
 		}
 
-		metas, err := pgx.CollectRows(rows, pgx.RowToStructByName[MetaKDVH])
-		if err != nil {
-			slog.Error(err.Error())
+		for rows.Next() {
+			var key KDVHKey
+			var span Timespan
+			err := rows.Scan(
+				&key.Inner.TableName,
+				&key.Station,
+				&key.Inner.ElemCode,
+				&span.FromTime,
+				&span.ToTime,
+			)
+
+			if err != nil {
+				slog.Error(err.Error())
+				os.Exit(1)
+			}
+
+			cache[key] = span
+		}
+
+		if rows.Err() != nil {
+			slog.Error(rows.Err().Error())
 			os.Exit(1)
 		}
 
-		for _, meta := range metas {
-			cache[meta.toKey()] = meta.toTimespan()
-		}
 	}
 
 	return cache
