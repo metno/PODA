@@ -1,17 +1,19 @@
-package kdvh
+package list
 
 import (
 	"fmt"
 	"slices"
+
+	"migrate/kdvh/db"
 )
 
-type ListConfig struct{}
+type Config struct{}
 
-func (config *ListConfig) Execute(_ []string) error {
+func (config *Config) Execute(_ []string) error {
 	fmt.Println("Available tables in KDVH:")
 
 	var tables []string
-	for table := range KDVH {
+	for table := range db.KDVH {
 		tables = append(tables, table)
 	}
 
