@@ -15,9 +15,9 @@ type ParamPermitMap map[StationId][]ParamPermit
 type StationPermitMap map[StationId]PermitId
 
 type ParamPermit struct {
-	TypeId   int
-	ParamdId int
-	PermitId int
+	TypeId   int32
+	ParamdId int32
+	PermitId int32
 }
 
 func cacheParamPermits(conn *pgx.Conn) ParamPermitMap {
@@ -82,4 +82,23 @@ func cacheStationPermits(conn *pgx.Conn) StationPermitMap {
 	}
 
 	return cache
+}
+
+func (c *Cache) timeseriesIsOpen(stnr, typeid, paramid int32) bool {
+	// First check param permit table
+	if permits, ok := c.ParamPermits[stnr]; ok {
+		for _, permit := range permits {
+			if (permit.TypeId == 0 || permit.TypeId == typeid) &&
+				(permit.ParamdId == 0 || permit.ParamdId == paramid) {
+				return permit.PermitId == 1
+			}
+		}
+	}
+
+	// Otherwise check station permit table
+	if permit, ok := c.StationPermits[stnr]; ok {
+		return permit == 1
+	}
+
+	return false
 }

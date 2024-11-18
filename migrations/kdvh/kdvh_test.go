@@ -20,6 +20,7 @@ type ImportTest struct {
 	table        string
 	station      int32
 	elem         string
+	permit       int32
 	expectedRows int64
 }
 
@@ -39,6 +40,9 @@ func (t *ImportTest) mockConfig() (*port.Config, *cache.Cache) {
 					IsScalar: true,
 				},
 			},
+			StationPermits: cache.StationPermitMap{
+				t.station: t.permit,
+			},
 		}
 }
 
@@ -52,7 +56,8 @@ func TestImportKDVH(t *testing.T) {
 	defer pool.Close()
 
 	testCases := []ImportTest{
-		{table: "T_MDATA", station: 12345, elem: "TA", expectedRows: 2644},
+		{table: "T_MDATA", station: 12345, elem: "TA", permit: 0, expectedRows: 0},    // restricted TS
+		{table: "T_MDATA", station: 12345, elem: "TA", permit: 1, expectedRows: 2644}, // open TS
 	}
 
 	// TODO: test does not fail, if flags are not inserted
