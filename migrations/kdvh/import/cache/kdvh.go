@@ -32,7 +32,7 @@ type Timespan struct {
 	ToTime   *time.Time `db:"tdato"`
 }
 
-func cacheKDVH(tables, stations, elements []string) KDVHMap {
+func cacheKDVH(tables, stations, elements []string, kdvh *db.KDVH) KDVHMap {
 	cache := make(KDVHMap)
 
 	fmt.Println("Connecting to KDVH proxy to cache metadata")
@@ -46,7 +46,7 @@ func cacheKDVH(tables, stations, elements []string) KDVHMap {
 	}
 	defer conn.Close(context.TODO())
 
-	for _, t := range db.KDVH {
+	for _, t := range kdvh.Tables {
 		if tables != nil && !slices.Contains(tables, t.TableName) {
 			continue
 		}

@@ -60,12 +60,14 @@ func TestImportKDVH(t *testing.T) {
 		{table: "T_MDATA", station: 12345, elem: "TA", permit: 1, expectedRows: 2644}, // open TS
 	}
 
+	kdvh := db.Init()
+
 	// TODO: test does not fail, if flags are not inserted
 	// TODO: bar does not work well with log print outs
 	for _, c := range testCases {
 		config, cache := c.mockConfig()
 
-		table, ok := db.KDVH[c.table]
+		table, ok := kdvh.Tables[c.table]
 		if !ok {
 			t.Fatal("Table does not exist in database")
 		}

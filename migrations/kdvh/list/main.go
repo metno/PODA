@@ -12,8 +12,10 @@ type Config struct{}
 func (config *Config) Execute(_ []string) error {
 	fmt.Println("Available tables in KDVH:")
 
+	kdvh := db.Init()
+
 	var tables []string
-	for table := range db.KDVH {
+	for table := range kdvh.Tables {
 		tables = append(tables, table)
 	}
 

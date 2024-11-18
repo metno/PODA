@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rickb777/period"
 
+	"migrate/kdvh/db"
 	"migrate/lard"
 )
 
@@ -23,9 +24,9 @@ type Cache struct {
 	StationPermits StationPermitMap
 }
 
-// Caches all the metadata needed for import.
+// Caches all the metadata needed for import of KDVH tables.
 // If any error occurs inside here the program will exit.
-func CacheMetadata(tables, stations, elements []string) *Cache {
+func CacheMetadata(tables, stations, elements []string, kdvh *db.KDVH) *Cache {
 	fmt.Println("Connecting to Stinfosys to cache metadata")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -36,7 +37,7 @@ func CacheMetadata(tables, stations, elements []string) *Cache {
 		os.Exit(1)
 	}
 
-	stinfoMeta := cacheStinfoMeta(tables, elements, conn)
+	stinfoMeta := cacheStinfoMeta(tables, elements, kdvh, conn)
 	stationPermits := cacheStationPermits(conn)
 	paramPermits := cacheParamPermits(conn)
 
@@ -47,7 +48,7 @@ func CacheMetadata(tables, stations, elements []string) *Cache {
 		StationPermits: stationPermits,
 		ParamPermits:   paramPermits,
 		Offsets:        cacheParamOffsets(),
-		KDVH:           cacheKDVH(tables, stations, elements),
+		KDVH:           cacheKDVH(tables, stations, elements, kdvh),
 	}
 }
 
