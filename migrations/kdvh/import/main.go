@@ -46,7 +46,7 @@ func (config *Config) Execute([]string) error {
 	defer pool.Close()
 
 	for _, table := range kdvh.Tables {
-		if config.Tables != nil && !slices.Contains(config.Tables, table.TableName) {
+		if len(config.Tables) > 0 && !slices.Contains(config.Tables, table.TableName) {
 			continue
 		}
 

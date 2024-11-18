@@ -47,15 +47,15 @@ func cacheKDVH(tables, stations, elements []string, kdvh *db.KDVH) KDVHMap {
 	defer conn.Close(context.TODO())
 
 	for _, t := range kdvh.Tables {
-		if tables != nil && !slices.Contains(tables, t.TableName) {
+		if len(tables) > 0 && !slices.Contains(tables, t.TableName) {
 			continue
 		}
 
 		// TODO: probably need to sanitize these inputs
 		query := fmt.Sprintf(
 			`SELECT table_name, stnr, elem_code, fdato, tdato FROM %s
-                WHERE ($1::bigint[] IS NULL OR stnr = ANY($1))
-                AND ($2::text[] IS NULL OR elem_code = ANY($2))`,
+                WHERE ($1::bigint[] = '{}' OR stnr = ANY($1))
+                AND ($2::text[] = '{}' OR elem_code = ANY($2))`,
 			t.ElemTableName,
 		)
 

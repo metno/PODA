@@ -22,6 +22,11 @@ var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
 func DumpTable(table *db.Table, pool *pgxpool.Pool, config *DumpConfig) {
 	defer utils.SendEmailOnPanic(fmt.Sprintf("%s dump", table.TableName), config.Email)
 
+	if err := os.MkdirAll(filepath.Join(config.BaseDir, table.Path), os.ModePerm); err != nil {
+		slog.Error(err.Error())
+		return
+	}
+
 	elements, err := getElements(table, pool, config)
 	if err != nil {
 		return
@@ -88,7 +93,7 @@ func getElements(table *db.Table, pool *pgxpool.Pool, config *DumpConfig) ([]str
 
 	filename := filepath.Join(config.BaseDir, table.Path, "elements.txt")
 	if err := utils.SaveToFile(elements, filename); err != nil {
-		slog.Warn("Could not save element list to " + filename)
+		slog.Warn(err.Error())
 	}
 
 	elements = utils.FilterSlice(config.Elements, elements, "")
@@ -143,7 +148,7 @@ func getStations(table *db.Table, pool *pgxpool.Pool, config *DumpConfig) ([]str
 
 	filename := filepath.Join(config.BaseDir, table.Path, "stations.txt")
 	if err := utils.SaveToFile(stations, filename); err != nil {
-		slog.Warn("Could not save element list to " + filename)
+		slog.Warn(err.Error())
 	}
 
 	stations = utils.FilterSlice(config.Stations, stations, "")
