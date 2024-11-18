@@ -3,6 +3,7 @@ package port
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"slices"
@@ -33,6 +34,7 @@ func (config *Config) Execute([]string) error {
 		os.Exit(1)
 	}
 
+	slog.Info("Import started!")
 	kdvh := db.Init()
 
 	// Cache metadata from Stinfosys, KDVH, and local `product_offsets.csv`
@@ -66,15 +68,17 @@ func (config *Config) Execute([]string) error {
 		ImportTable(table, cache, pool, config)
 	}
 
+	log.SetOutput(os.Stdout)
 	if config.Reindex {
 		createIndices(pool)
 	}
 
+	slog.Info("Import complete!")
 	return nil
 }
 
 func dropIndices(pool *pgxpool.Pool) {
-	fmt.Println("Dropping table indices...")
+	slog.Info("Dropping table indices...")
 
 	file, err := os.ReadFile("../db/drop_indices.sql")
 	if err != nil {
@@ -88,7 +92,7 @@ func dropIndices(pool *pgxpool.Pool) {
 }
 
 func createIndices(pool *pgxpool.Pool) {
-	fmt.Println("Recreating table indices...")
+	slog.Info("Recreating table indices...")
 
 	files := []string{"../db/public.sql", "../db/flags.sql"}
 	for _, filename := range files {
