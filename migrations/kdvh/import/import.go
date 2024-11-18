@@ -86,6 +86,12 @@ func importStation(table *db.Table, station os.DirEntry, cache *cache.Cache, poo
 				return
 			}
 
+			// TODO: use this to choose which table to use on insert
+			if !tsInfo.IsOpen {
+				slog.Warn(tsInfo.Logstr + "Timeseries data is restricted")
+				return
+			}
+
 			file, err := os.Open(filepath.Join(dir, element.Name()))
 			if err != nil {
 				slog.Warn(err.Error())

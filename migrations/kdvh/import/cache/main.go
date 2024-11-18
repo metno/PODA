@@ -60,6 +60,7 @@ type TsInfo struct {
 	Param   StinfoParam
 	Span    Timespan
 	Logstr  string
+	IsOpen  bool
 }
 
 func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpool.Pool) (*TsInfo, error) {
@@ -72,6 +73,9 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 		slog.Error(logstr + "Missing metadata in Stinfosys")
 		return nil, errors.New("")
 	}
+
+	// Check if data for this station/element is restricted
+	isOpen := cache.timeseriesIsOpen(station, param.TypeID, param.ParamID)
 
 	// No need to check for `!ok`, will default to 0 offset
 	offset := cache.Offsets[key.Inner]
@@ -86,6 +90,7 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 		Sensor:    &param.Sensor,
 		Level:     param.Hlevel,
 	}
+
 	tsid, err := lard.GetTimeseriesID(label, param.Fromtime, pool)
 	if err != nil {
 		slog.Error(logstr + "could not obtain timeseries - " + err.Error())
@@ -102,5 +107,6 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 		Param:   param,
 		Span:    span,
 		Logstr:  logstr,
+		IsOpen:  isOpen,
 	}, nil
 }
