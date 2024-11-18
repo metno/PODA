@@ -27,7 +27,7 @@ type Cache struct {
 // Caches all the metadata needed for import of KDVH tables.
 // If any error occurs inside here the program will exit.
 func CacheMetadata(tables, stations, elements []string, kdvh *db.KDVH) *Cache {
-	fmt.Println("Connecting to Stinfosys to cache metadata")
+	slog.Info("Connecting to Stinfosys to cache metadata")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 

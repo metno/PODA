@@ -35,7 +35,7 @@ type Timespan struct {
 func cacheKDVH(tables, stations, elements []string, kdvh *db.KDVH) KDVHMap {
 	cache := make(KDVHMap)
 
-	fmt.Println("Connecting to KDVH proxy to cache metadata")
+	slog.Info("Connecting to KDVH proxy to cache metadata")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
