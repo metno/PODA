@@ -20,8 +20,6 @@ import (
 var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
 
 func DumpTable(table *db.Table, pool *pgxpool.Pool, config *DumpConfig) {
-	defer utils.SendEmailOnPanic(fmt.Sprintf("%s dump", table.TableName), config.Email)
-
 	if err := os.MkdirAll(filepath.Join(config.BaseDir, table.Path), os.ModePerm); err != nil {
 		slog.Error(err.Error())
 		return
