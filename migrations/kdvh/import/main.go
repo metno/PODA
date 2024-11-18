@@ -24,6 +24,7 @@ type Config struct {
 	HasHeader bool     `long:"header" description:"Add this flag if the dumped files have a header row"`
 	Skip      string   `long:"skip" choice:"data" choice:"flags" description:"Skip import of data or flags"`
 	Email     []string `long:"email" delimiter:"," description:"Optional comma separated list of email addresses used to notify if the program crashed"`
+	Reindex   bool     `long:"reindex" description:"Drops PG indices before insertion. Might improve performance"`
 }
 
 func (config *Config) Execute([]string) error {
@@ -45,6 +46,10 @@ func (config *Config) Execute([]string) error {
 	}
 	defer pool.Close()
 
+	if config.Reindex {
+		dropIndices(pool)
+	}
+
 	for _, table := range kdvh.Tables {
 		if len(config.Tables) > 0 && !slices.Contains(config.Tables, table.TableName) {
 			continue
@@ -61,5 +66,40 @@ func (config *Config) Execute([]string) error {
 		ImportTable(table, cache, pool, config)
 	}
 
+	if config.Reindex {
+		createIndices(pool)
+	}
+
 	return nil
+}
+
+func dropIndices(pool *pgxpool.Pool) {
+	fmt.Println("Dropping table indices...")
+
+	file, err := os.ReadFile("../db/drop_indices.sql")
+	if err != nil {
+		panic(err.Error())
+	}
+
+	_, err = pool.Exec(context.Background(), string(file))
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
+func createIndices(pool *pgxpool.Pool) {
+	fmt.Println("Recreating table indices...")
+
+	files := []string{"../db/public.sql", "../db/flags.sql"}
+	for _, filename := range files {
+		file, err := os.ReadFile(filename)
+		if err != nil {
+			panic(err.Error())
+		}
+
+		_, err = pool.Exec(context.Background(), string(file))
+		if err != nil {
+			panic(err.Error())
+		}
+	}
 }
