@@ -36,15 +36,16 @@ func cacheStinfoMeta(tables, elements []string, kdvh *db.KDVH, conn *pgx.Conn) S
 	cache := make(StinfoMap)
 
 	for _, table := range kdvh.Tables {
-		if tables != nil && !slices.Contains(tables, table.TableName) {
+		if len(tables) > 0 && !slices.Contains(tables, table.TableName) {
 			continue
 		}
+
 		// select paramid, elem_code, scalar from elem_map_cfnames_param join param using(paramid) where scalar = false
 		query := `SELECT elem_code, table_name, typeid, paramid, hlevel, sensor, fromtime, scalar
                     FROM elem_map_cfnames_param
                     JOIN param USING(paramid)
                     WHERE table_name = $1
-                    AND ($2::text[] IS NULL OR elem_code = ANY($2))`
+                    AND ($2::text[] = '{}' OR elem_code = ANY($2))`
 
 		rows, err := conn.Query(context.TODO(), query, table.TableName, elements)
 		if err != nil {

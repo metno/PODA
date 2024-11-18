@@ -1,5 +1,7 @@
 github.com/Lun4m/go-flags v0.0.0-20241113125827-68757125e949 h1:7xyEGIr1X5alOjBjlNTDF+aRBcRIo60YX5sdlziLE5w=
 github.com/Lun4m/go-flags v0.0.0-20241113125827-68757125e949/go.mod h1:42/L0FDbP0qe91I+81tBqjU3uoz1tn1GDMZAhcCE2PE=
+github.com/Lun4m/go-flags v0.0.0-20241118100134-6375192b7985 h1:eUA/sFZ1CtY9+9y/fPpUivYW8fJBlXqB4/8CjC+yXqk=
+github.com/Lun4m/go-flags v0.0.0-20241118100134-6375192b7985/go.mod h1:42/L0FDbP0qe91I+81tBqjU3uoz1tn1GDMZAhcCE2PE=
 github.com/chengxilo/virtualterm v1.0.4 h1:Z6IpERbRVlfB8WkOmtbHiDbBANU7cimRIof7mk9/PwM=
 github.com/chengxilo/virtualterm v1.0.4/go.mod h1:DyxxBZz/x1iqJjFxTFcr6/x+jSpqN0iwWCOK1q10rlY=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
