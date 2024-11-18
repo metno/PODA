@@ -29,7 +29,8 @@ func (config *DumpConfig) Execute([]string) error {
 		return nil
 	}
 
-	for _, table := range db.KDVH {
+	kdvh := db.Init()
+	for _, table := range kdvh.Tables {
 		if config.Tables != nil && !slices.Contains(config.Tables, table.TableName) {
 			continue
 		}

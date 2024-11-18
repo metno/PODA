@@ -32,10 +32,10 @@ type StinfoParam struct {
 }
 
 // Save metadata for later use by quering Stinfosys
-func cacheStinfoMeta(tables, elements []string, conn *pgx.Conn) StinfoMap {
+func cacheStinfoMeta(tables, elements []string, kdvh *db.KDVH, conn *pgx.Conn) StinfoMap {
 	cache := make(StinfoMap)
 
-	for _, table := range db.KDVH {
+	for _, table := range kdvh.Tables {
 		if tables != nil && !slices.Contains(tables, table.TableName) {
 			continue
 		}

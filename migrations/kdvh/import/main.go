@@ -32,8 +32,10 @@ func (config *Config) Execute([]string) error {
 		os.Exit(1)
 	}
 
+	kdvh := db.Init()
+
 	// Cache metadata from Stinfosys, KDVH, and local `product_offsets.csv`
-	cache := cache.CacheMetadata(config.Tables, config.Stations, config.Elements)
+	cache := cache.CacheMetadata(config.Tables, config.Stations, config.Elements, kdvh)
 
 	// Create connection pool for LARD
 	pool, err := pgxpool.New(context.TODO(), os.Getenv("LARD_STRING"))
@@ -43,7 +45,7 @@ func (config *Config) Execute([]string) error {
 	}
 	defer pool.Close()
 
-	for _, table := range db.KDVH {
+	for _, table := range kdvh.Tables {
 		if config.Tables != nil && !slices.Contains(config.Tables, table.TableName) {
 			continue
 		}
