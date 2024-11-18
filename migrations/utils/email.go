@@ -45,7 +45,7 @@ func sendEmail(subject, body string, to []string) {
 // send an email and resume the panic
 func SendEmailOnPanic(function string, recipients []string) {
 	if r := recover(); r != nil {
-		if recipients != nil {
+		if len(recipients) > 0 {
 			body := "KDVH importer was unable to finish successfully, and the error was not handled." +
 				" This email is sent from a recover function triggered in " +
 				function +

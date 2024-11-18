@@ -19,7 +19,7 @@ type DumpConfig struct {
 	Elements  []string `short:"e" delimiter:"," long:"elem" default:"" description:"Optional comma separated list of element codes. By default all element codes are processed"`
 	Overwrite bool     `long:"overwrite" description:"Overwrite any existing dumped files"`
 	Email     []string `long:"email" delimiter:"," description:"Optional comma separated list of email addresses used to notify if the program crashed"`
-	MaxConn   int      `long:"conns" default:"10" description:"Max number of concurrent connections allowed to KDVH"`
+	MaxConn   int      `short:"n" long:"conn" default:"4" description:"Max number of concurrent connections allowed to KDVH"`
 }
 
 func (config *DumpConfig) Execute([]string) error {
@@ -31,7 +31,7 @@ func (config *DumpConfig) Execute([]string) error {
 
 	kdvh := db.Init()
 	for _, table := range kdvh.Tables {
-		if config.Tables != nil && !slices.Contains(config.Tables, table.TableName) {
+		if len(config.Tables) > 0 && !slices.Contains(config.Tables, table.TableName) {
 			continue
 		}
 

@@ -33,7 +33,7 @@ func NewBar(size int, description string) *progressbar.ProgressBar {
 // formatMsg is an optional format string with a single format argument that can be used
 // to add context on why the element may be missing from the reference slice
 func FilterSlice[T comparable](slice, reference []T, formatMsg string) []T {
-	if slice == nil {
+	if len(slice) == 0 {
 		return reference
 	}
 

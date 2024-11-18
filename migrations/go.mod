@@ -26,4 +26,4 @@ require (
 	golang.org/x/text v0.16.0 // indirect
 )
 
-replace github.com/jessevdk/go-flags => github.com/Lun4m/go-flags v0.0.0-20241113125827-68757125e949
+replace github.com/jessevdk/go-flags => github.com/Lun4m/go-flags v0.0.0-20241118100134-6375192b7985

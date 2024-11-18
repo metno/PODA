@@ -147,7 +147,7 @@ func getStationNumber(station os.DirEntry, stationList []string) (int32, error) 
 		return 0, errors.New(fmt.Sprintf("%s is not a directory, skipping", station.Name()))
 	}
 
-	if stationList != nil && !slices.Contains(stationList, station.Name()) {
+	if len(stationList) > 0 && !slices.Contains(stationList, station.Name()) {
 		return 0, errors.New(fmt.Sprintf("Station %v not in the list, skipping", station.Name()))
 	}
 
@@ -166,7 +166,7 @@ func elemcodeIsInvalid(element string) bool {
 func getElementCode(element os.DirEntry, elementList []string) (string, error) {
 	elemCode := strings.ToUpper(strings.TrimSuffix(element.Name(), ".csv"))
 
-	if elementList != nil && !slices.Contains(elementList, elemCode) {
+	if len(elementList) > 0 && !slices.Contains(elementList, elemCode) {
 		return "", errors.New(fmt.Sprintf("Element '%s' not in the list, skipping", elemCode))
 	}
 
