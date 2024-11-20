@@ -19,27 +19,7 @@ import (
 // It returns three structs for each of the lard tables we are inserting into
 type ConvertFunction func(KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error)
 
-// var CONV_MAP map[string]ConvertFunction = map[string]ConvertFunction{
-// 	"T_EDATA":                ConvertEdata,
-// 	"T_PDATA":                ConvertPdata,
-// 	"T_NDATA":                ConvertNdata,
-// 	"T_VDATA":                ConvertVdata,
-// 	"T_MONTH":                ConvertProduct,
-// 	"T_DIURNAL":              ConvertProduct,
-// 	"T_HOMOGEN_DIURNAL":      ConvertProduct,
-// 	"T_HOMOGEN_MONTH":        ConvertProduct,
-// 	"T_DIURNAL_INTERPOLATED": ConvertDiurnalInterpolated,
-// }
-
-// func ConvertFunc(table *db.Table) ConvertFunction {
-// 	fn, ok := CONV_MAP[table.TableName]
-// 	if !ok {
-// 		return Convert
-// 	}
-// 	return fn
-// }
-
-func ConvertFunc(table *db.Table) ConvertFunction {
+func getConvertFunc(table *db.Table) ConvertFunction {
 	switch table.TableName {
 	case "T_EDATA":
 		return ConvertEdata

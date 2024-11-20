@@ -72,11 +72,17 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 	if !ok {
 		// TODO: should it fail here? How do we deal with data without metadata?
 		slog.Error(logstr + "Missing metadata in Stinfosys")
-		return nil, errors.New("")
+		return nil, errors.New("No metadata")
 	}
 
 	// Check if data for this station/element is restricted
 	isOpen := cache.timeseriesIsOpen(station, param.TypeID, param.ParamID)
+
+	// TODO: eventually use this to choose which table to use on insert
+	if !isOpen {
+		slog.Warn(logstr + "Timeseries data is restricted")
+		return nil, errors.New("Restricted data")
+	}
 
 	// No need to check for `!ok`, will default to 0 offset
 	offset := cache.Offsets[key.Inner]

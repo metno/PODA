@@ -31,13 +31,80 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 		return 0
 	}
 
+	convFunc := getConvertFunc(table)
+
 	bar := utils.NewBar(len(stations), table.TableName)
 	bar.RenderBlank()
 	for _, station := range stations {
-		count, err := importStation(table, station, cache, pool, config)
-		if err == nil {
-			rowsInserted += count
+		stnr, err := getStationNumber(station, config.Stations)
+		if err != nil {
+			if config.Verbose {
+				slog.Info(err.Error())
+			}
+			continue
 		}
+
+		dir := filepath.Join(config.BaseDir, table.Path, station.Name())
+		elements, err := os.ReadDir(dir)
+		if err != nil {
+			slog.Warn(err.Error())
+			continue
+		}
+
+		var wg sync.WaitGroup
+		for _, element := range elements {
+			elemCode, err := getElementCode(element, config.Elements)
+			if err != nil {
+				if config.Verbose {
+					slog.Info(err.Error())
+				}
+				continue
+			}
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				tsInfo, err := cache.NewTsInfo(table.TableName, elemCode, stnr, pool)
+				if err != nil {
+					return
+				}
+
+				filename := filepath.Join(dir, element.Name())
+				data, text, flag, err := parseData(filename, tsInfo, convFunc, table, config)
+				if err != nil {
+					return
+				}
+
+				var count int64
+				if !(config.Skip == "data") {
+					if tsInfo.Param.IsScalar {
+						count, err = lard.InsertData(data, pool, tsInfo.Logstr)
+						if err != nil {
+							slog.Error(tsInfo.Logstr + "failed data bulk insertion - " + err.Error())
+							return
+						}
+					} else {
+						count, err = lard.InsertTextData(text, pool, tsInfo.Logstr)
+						if err != nil {
+							slog.Error(tsInfo.Logstr + "failed non-scalar data bulk insertion - " + err.Error())
+							return
+						}
+						// TODO: should we skip inserting flags here? In kvalobs there are no flags for text data
+						// return count, nil
+					}
+				}
+
+				if !(config.Skip == "flags") {
+					if err := lard.InsertFlags(flag, pool, tsInfo.Logstr); err != nil {
+						slog.Error(tsInfo.Logstr + "failed flag bulk insertion - " + err.Error())
+					}
+				}
+
+				rowsInserted += count
+			}()
+		}
+		wg.Wait()
 		bar.Add(1)
 	}
 
@@ -46,98 +113,6 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 	fmt.Println(outputStr)
 
 	return rowsInserted
-}
-
-// Loops over the element files present in the station directory and processes them concurrently
-func importStation(table *db.Table, station os.DirEntry, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (totRows int64, err error) {
-	stnr, err := getStationNumber(station, config.Stations)
-	if err != nil {
-		if config.Verbose {
-			slog.Info(err.Error())
-		}
-		return 0, err
-	}
-
-	dir := filepath.Join(config.BaseDir, table.Path, station.Name())
-	elements, err := os.ReadDir(dir)
-	if err != nil {
-		slog.Warn(err.Error())
-		return 0, err
-	}
-
-	var wg sync.WaitGroup
-	for _, element := range elements {
-		elemCode, err := getElementCode(element, config.Elements)
-		if err != nil {
-			if config.Verbose {
-				slog.Info(err.Error())
-			}
-			continue
-		}
-
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
-			tsInfo, err := cache.NewTsInfo(table.TableName, elemCode, stnr, pool)
-			if err != nil {
-				return
-			}
-
-			// TODO: use this to choose which table to use on insert
-			if !tsInfo.IsOpen {
-				slog.Warn(tsInfo.Logstr + "Timeseries data is restricted")
-				return
-			}
-
-			file, err := os.Open(filepath.Join(dir, element.Name()))
-			if err != nil {
-				slog.Warn(err.Error())
-				return
-			}
-			defer file.Close()
-
-			data, text, flag, err := parseData(file, tsInfo, table, config)
-			if err != nil {
-				return
-			}
-
-			if len(data) == 0 {
-				slog.Info(tsInfo.Logstr + "no rows to insert (all obstimes > max import time)")
-				return
-			}
-
-			var count int64
-			if !(config.Skip == "data") {
-				if tsInfo.Param.IsScalar {
-					count, err = lard.InsertData(data, pool, tsInfo.Logstr)
-					if err != nil {
-						slog.Error(tsInfo.Logstr + "failed data bulk insertion - " + err.Error())
-						return
-					}
-				} else {
-					count, err = lard.InsertTextData(text, pool, tsInfo.Logstr)
-					if err != nil {
-						slog.Error(tsInfo.Logstr + "failed non-scalar data bulk insertion - " + err.Error())
-						return
-					}
-					// TODO: should we skip inserting flags here? In kvalobs there are no flags for text data
-					// return count, nil
-				}
-			}
-
-			if !(config.Skip == "flags") {
-				if err := lard.InsertFlags(flag, pool, tsInfo.Logstr); err != nil {
-					slog.Error(tsInfo.Logstr + "failed flag bulk insertion - " + err.Error())
-				}
-			}
-
-			totRows += count
-		}()
-	}
-	wg.Wait()
-
-	return totRows, nil
 }
 
 func getStationNumber(station os.DirEntry, stationList []string) (int32, error) {
@@ -176,8 +151,15 @@ func getElementCode(element os.DirEntry, elementList []string) (string, error) {
 
 // Parses the observations in the CSV file, converts them with the table
 // ConvertFunction and returns three arrays that can be passed to pgx.CopyFromRows
-func parseData(handle *os.File, tsInfo *cache.TsInfo, table *db.Table, config *Config) ([][]any, [][]any, [][]any, error) {
-	scanner := bufio.NewScanner(handle)
+func parseData(filename string, tsInfo *cache.TsInfo, convFunc ConvertFunction, table *db.Table, config *Config) ([][]any, [][]any, [][]any, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		slog.Warn(err.Error())
+		return nil, nil, nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
 
 	var rowCount int
 	// Try to infer row count from header
@@ -189,8 +171,6 @@ func parseData(handle *os.File, tsInfo *cache.TsInfo, table *db.Table, config *C
 	data := make([][]any, 0, rowCount)
 	text := make([][]any, 0, rowCount)
 	flag := make([][]any, 0, rowCount)
-
-	convFunc := ConvertFunc(table)
 
 	for scanner.Scan() {
 		cols := strings.Split(scanner.Text(), config.Sep)
@@ -218,6 +198,11 @@ func parseData(handle *os.File, tsInfo *cache.TsInfo, table *db.Table, config *C
 		data = append(data, dataRow.ToRow())
 		text = append(text, textRow.ToRow())
 		flag = append(flag, flagRow.ToRow())
+	}
+
+	if len(data) == 0 {
+		slog.Info(tsInfo.Logstr + "no rows to insert (all obstimes > max import time)")
+		return nil, nil, nil, errors.New("No rows to insert")
 	}
 
 	return data, text, flag, nil
