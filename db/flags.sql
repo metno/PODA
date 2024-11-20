@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS flags.kvdata (
     corrected REAL NULL,
     controlinfo TEXT NULL,
     useinfo TEXT NULL,
-    -- TODO: check that this type is correct, it's stored as a string in Kvalobs?
     cfailed INT4 NULL,
     CONSTRAINT unique_kvdata_timeseries_obstime UNIQUE (timeseries, obstime)
 );
@@ -20,7 +19,7 @@ CREATE TABLE IF NOT EXISTS flags.old_databases (
     corrected REAL NULL,
     controlinfo TEXT NULL,
     useinfo TEXT NULL,
-    cfailed TEXT NULL ,
+    cfailed INT4 NULL ,
     CONSTRAINT unique_old_flags_timeseries_obstime UNIQUE (timeseries, obstime)
 );
 CREATE INDEX IF NOT EXISTS old_flags_obtime_index ON flags.old_databases (obstime);
