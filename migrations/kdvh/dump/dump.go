@@ -35,7 +35,7 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *DumpConfig) {
 		return
 	}
 
-	dumpFunc := DumpFunc(table)
+	dumpFunc := getDumpFunc(table)
 
 	// Used to limit connections to the database
 	semaphore := make(chan struct{}, config.MaxConn)

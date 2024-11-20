@@ -25,24 +25,7 @@ type DumpArgs struct {
 	logStr    string
 }
 
-// var DUMP_MAP map[string]DumpFunction = map[string]DumpFunction{
-// 	"T_METARDATA":       dumpDataOnly,
-// 	"T_HOMOGEN_DIURNAL": dumpDataOnly,
-// 	"T_SECOND_DATA":     dumpByYear,
-// 	"T_MINUTE_DATA":     dumpByYear,
-// 	"T_10MINUTE_DATA":   dumpByYear,
-// 	"T_HOMOGEN_MONTH":   dumpHomogenMonth,
-// }
-
-// func DumpFunc(table *db.Table) DumpFunction {
-// 	fn, ok := DUMP_MAP[table.TableName]
-// 	if !ok {
-// 		return dumpDataAndFlags
-// 	}
-// 	return fn
-// }
-
-func DumpFunc(table *db.Table) DumpFunction {
+func getDumpFunc(table *db.Table) DumpFunction {
 	switch table.TableName {
 	case "T_METARDATA", "T_HOMOGEN_DIURNAL":
 		return dumpDataOnly
