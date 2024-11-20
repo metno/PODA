@@ -52,6 +52,18 @@ func (config *Config) Execute([]string) error {
 		dropIndices(pool)
 	}
 
+	// Recreate indices even in case the main function panics
+	defer func() {
+		r := recover()
+		if config.Reindex {
+			createIndices(pool)
+		}
+
+		if r != nil {
+			panic(r)
+		}
+	}()
+
 	for _, table := range kdvh.Tables {
 		if len(config.Tables) > 0 && !slices.Contains(config.Tables, table.TableName) {
 			continue
@@ -69,10 +81,6 @@ func (config *Config) Execute([]string) error {
 	}
 
 	log.SetOutput(os.Stdout)
-	if config.Reindex {
-		createIndices(pool)
-	}
-
 	slog.Info("Import complete!")
 	return nil
 }
