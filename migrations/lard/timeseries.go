@@ -16,7 +16,7 @@ type Label struct {
 	Level     *int32
 }
 
-func GetTimeseriesID(label Label, fromtime time.Time, pool *pgxpool.Pool) (tsid int32, err error) {
+func GetTimeseriesID(label *Label, fromtime time.Time, pool *pgxpool.Pool) (tsid int32, err error) {
 	// Query LARD labels table
 	err = pool.QueryRow(
 		context.TODO(),
