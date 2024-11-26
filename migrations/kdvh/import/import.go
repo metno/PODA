@@ -25,7 +25,7 @@ import (
 var INVALID_ELEMENTS = []string{"TYPEID", "TAM_NORMAL_9120", "RRA_NORMAL_9120", "OT", "OTN", "OTX", "DD06", "DD12", "DD18"}
 
 func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (rowsInserted int64) {
-	stations, err := os.ReadDir(filepath.Join(config.BaseDir, table.Path))
+	stations, err := os.ReadDir(filepath.Join(config.Path, table.Path))
 	if err != nil {
 		slog.Warn(err.Error())
 		return 0
@@ -44,7 +44,7 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 			continue
 		}
 
-		dir := filepath.Join(config.BaseDir, table.Path, station.Name())
+		dir := filepath.Join(config.Path, table.Path, station.Name())
 		elements, err := os.ReadDir(dir)
 		if err != nil {
 			slog.Warn(err.Error())

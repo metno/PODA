@@ -20,7 +20,7 @@ import (
 var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
 
 func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
-	if err := os.MkdirAll(filepath.Join(config.BaseDir, table.Path), os.ModePerm); err != nil {
+	if err := os.MkdirAll(filepath.Join(config.Path, table.Path), os.ModePerm); err != nil {
 		slog.Error(err.Error())
 		return
 	}
@@ -43,7 +43,7 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 	bar := utils.NewBar(len(stations), table.TableName)
 	bar.RenderBlank()
 	for _, station := range stations {
-		path := filepath.Join(config.BaseDir, table.Path, string(station))
+		path := filepath.Join(config.Path, table.Path, string(station))
 		if err := os.MkdirAll(path, os.ModePerm); err != nil {
 			slog.Error(err.Error())
 			return
@@ -89,7 +89,7 @@ func getElements(table *db.Table, pool *pgxpool.Pool, config *Config) ([]string,
 		return nil, err
 	}
 
-	filename := filepath.Join(config.BaseDir, table.Path, "elements.txt")
+	filename := filepath.Join(config.Path, table.Path, "elements.txt")
 	if err := utils.SaveToFile(elements, filename); err != nil {
 		slog.Warn(err.Error())
 	}
@@ -144,7 +144,7 @@ func getStations(table *db.Table, pool *pgxpool.Pool, config *Config) ([]string,
 		return nil, err
 	}
 
-	filename := filepath.Join(config.BaseDir, table.Path, "stations.txt")
+	filename := filepath.Join(config.Path, table.Path, "stations.txt")
 	if err := utils.SaveToFile(stations, filename); err != nil {
 		slog.Warn(err.Error())
 	}

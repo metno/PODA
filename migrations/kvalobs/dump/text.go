@@ -72,12 +72,12 @@ func (config *Config) dumpTextTS(pool *pgxpool.Pool) {
 		return
 	}
 
-	if err := os.MkdirAll(config.BaseDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(config.Path, os.ModePerm); err != nil {
 		slog.Error(err.Error())
 		return
 	}
 
-	path := filepath.Join(config.BaseDir, "text_timeseries.csv")
+	path := filepath.Join(config.Path, "text_timeseries.csv")
 	file, err := os.Create(path)
 	if err != nil {
 		slog.Error(err.Error())
