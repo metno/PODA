@@ -19,7 +19,7 @@ import (
 // List of columns that we do not need to select when extracting the element codes from a KDVH table
 var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
 
-func DumpTable(table *db.Table, pool *pgxpool.Pool, config *DumpConfig) {
+func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 	if err := os.MkdirAll(filepath.Join(config.BaseDir, table.Path), os.ModePerm); err != nil {
 		slog.Error(err.Error())
 		return
@@ -83,7 +83,7 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *DumpConfig) {
 }
 
 // Fetches elements and filters them based on user input
-func getElements(table *db.Table, pool *pgxpool.Pool, config *DumpConfig) ([]string, error) {
+func getElements(table *db.Table, pool *pgxpool.Pool, config *Config) ([]string, error) {
 	elements, err := fetchElements(table, pool)
 	if err != nil {
 		return nil, err
@@ -138,7 +138,7 @@ func fetchElements(table *db.Table, pool *pgxpool.Pool) (elements []string, err 
 }
 
 // Fetches station numbers and filters them based on user input
-func getStations(table *db.Table, pool *pgxpool.Pool, config *DumpConfig) ([]string, error) {
+func getStations(table *db.Table, pool *pgxpool.Pool, config *Config) ([]string, error) {
 	stations, err := fetchStnrFromElemTable(table, pool)
 	if err != nil {
 		return nil, err

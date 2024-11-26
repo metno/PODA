@@ -16,19 +16,20 @@ import (
 )
 
 type Config struct {
-	Verbose   bool     `short:"v" description:"Increase verbosity level"`
-	BaseDir   string   `short:"p" long:"path" default:"./dumps/kdvh" description:"Location the dumped data will be stored in"`
-	Tables    []string `short:"t" long:"table" delimiter:"," default:"" description:"Optional comma separated list of table names. By default all available tables are processed"`
-	Stations  []string `short:"s" long:"station" delimiter:"," default:"" description:"Optional comma separated list of stations IDs. By default all station IDs are processed"`
-	Elements  []string `short:"e" long:"elemcode" delimiter:"," default:"" description:"Optional comma separated list of element codes. By default all element codes are processed"`
-	Sep       string   `long:"sep" default:","  description:"Separator character in the dumped files. Needs to be quoted"`
-	HasHeader bool     `long:"header" description:"Add this flag if the dumped files have a header row"`
-	Skip      string   `long:"skip" choice:"data" choice:"flags" description:"Skip import of data or flags"`
-	Email     []string `long:"email" delimiter:"," description:"Optional comma separated list of email addresses used to notify if the program crashed"`
-	Reindex   bool     `long:"reindex" description:"Drops PG indices before insertion. Might improve performance"`
+	Verbose   bool     `arg:"-v" help:"Increase verbosity level"`
+	BaseDir   string   `arg:"-p,--path" default:"./dumps/kdvh" help:"Location the dumped data will be stored in"`
+	Tables    []string `arg:"-t" help:"Optional comma separated list of table names. By default all available tables are processed"`
+	Stations  []string `arg:"-s" help:"Optional comma separated list of stations IDs. By default all station IDs are processed"`
+	Elements  []string `arg:"-e" help:"Optional comma separated list of element codes. By default all element codes are processed"`
+	Sep       string   `default:"," help:"Separator character in the dumped files. Needs to be quoted"`
+	HasHeader bool     `help:"Add this flag if the dumped files have a header row"`
+	// TODO: this isn't implemented in go-arg
+	// Skip      string   `choice:"data" choice:"flags" help:"Skip import of data or flags"`
+	Email   []string `help:"Optional comma separated list of email addresses used to notify if the program crashed"`
+	Reindex bool     `help:"Drops PG indices before insertion. Might improve performance"`
 }
 
-func (config *Config) Execute([]string) error {
+func (config *Config) Execute() {
 	if len(config.Sep) > 1 {
 		fmt.Printf("Error: '--sep' only accepts single-byte characters. Got %s", config.Sep)
 		os.Exit(1)
@@ -44,7 +45,7 @@ func (config *Config) Execute([]string) error {
 	pool, err := pgxpool.New(context.TODO(), os.Getenv("LARD_STRING"))
 	if err != nil {
 		slog.Error(fmt.Sprint("Could not connect to Lard:", err))
-		return err
+		return
 	}
 	defer pool.Close()
 
@@ -82,7 +83,6 @@ func (config *Config) Execute([]string) error {
 
 	log.SetOutput(os.Stdout)
 	slog.Info("Import complete!")
-	return nil
 }
 
 func dropIndices(pool *pgxpool.Pool) {

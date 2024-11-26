@@ -9,7 +9,7 @@ import (
 
 type Config struct{}
 
-func (config *Config) Execute(_ []string) error {
+func (config *Config) Execute() {
 	fmt.Println("Available tables in KDVH:")
 
 	kdvh := db.Init()
@@ -23,6 +23,4 @@ func (config *Config) Execute(_ []string) error {
 	for _, table := range tables {
 		fmt.Println("    -", table)
 	}
-
-	return nil
 }

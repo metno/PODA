@@ -1,9 +1,14 @@
 package kvalobs
 
 import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/alexflint/go-arg"
+
 	"migrate/kvalobs/dump"
 	port "migrate/kvalobs/import"
-	"time"
 )
 
 // Kvalobs is composed of two databases
@@ -118,6 +123,18 @@ var FROMTIME time.Time = time.Date(2006, 01, 01, 00, 00, 00, 00, time.UTC)
 // }
 
 type Cmd struct {
-	Dump   dump.Config `command:"dump" description:"Dump tables from Kvalobs to CSV"`
-	Import port.Config `command:"import" description:"Import CSV file dumped from Kvalobs"`
+	Dump   *dump.Config `arg:"subcommand" help:"Dump tables from Kvalobs to CSV"`
+	Import *port.Config `arg:"subcommand" help:"Import CSV file dumped from Kvalobs"`
+}
+
+func (c *Cmd) Execute(parser *arg.Parser) {
+	switch {
+	case c.Dump != nil:
+		c.Dump.Execute()
+	case c.Import != nil:
+		c.Import.Execute()
+	default:
+		fmt.Println("Error: passing a subcommand is required.\n")
+		parser.WriteHelpForSubcommand(os.Stdout, "kvalobs")
+	}
 }

@@ -3,15 +3,16 @@ module migrate
 go 1.22.3
 
 require (
+	github.com/alexflint/go-arg v1.5.1
 	github.com/gocarina/gocsv v0.0.0-20240520201108-78e41c74b4b1
 	github.com/jackc/pgx/v5 v5.6.0
-	github.com/jessevdk/go-flags v1.6.1
 	github.com/joho/godotenv v1.5.1
 	github.com/rickb777/period v1.0.5
 	github.com/schollz/progressbar/v3 v3.16.1
 )
 
 require (
+	github.com/alexflint/go-scalar v1.2.0 // indirect
 	github.com/govalues/decimal v0.1.29 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
@@ -25,5 +26,3 @@ require (
 	golang.org/x/term v0.25.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
 )
-
-replace github.com/jessevdk/go-flags => github.com/Lun4m/go-flags v0.0.0-20241118100134-6375192b7985
