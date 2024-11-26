@@ -20,6 +20,7 @@ import (
 //     // Supposed to join text anf number data to single slice
 //     return nil
 // }
+//
 // TODO: not sure what to do with this one
 // func joinTS(first, second []lard.Label)
 
@@ -28,11 +29,11 @@ type Config struct {
 	FromTime *utils.Timestamp `arg:"--from" help:"Fetch data only starting from this date-only timestamp"`
 	ToTime   *utils.Timestamp `arg:"--to" help:"Fetch data only until this date-only timestamp"`
 	// Ts       []int32    `long:"ts" help:"Optional comma separated list of timeseries. By default all available timeseries are processed"`
-	Stations []int32 `help:"Optional space separated list of station numbers."`
-	TypeIds  []int32 `help:"Optional space separated list of type IDs."`
-	ParamIds []int32 `help:"Optional space separated list of param IDs."`
-	Sensors  []int32 `help:"Optional space separated list of sensors."`
-	Levels   []int32 `help:"Optional space separated list of levels."`
+	Stations []int32 `help:"Optional space separated list of station numbers"`
+	TypeIds  []int32 `help:"Optional space separated list of type IDs"`
+	ParamIds []int32 `help:"Optional space separated list of param IDs"`
+	Sensors  []int32 `help:"Optional space separated list of sensors"`
+	Levels   []int32 `help:"Optional space separated list of levels"`
 }
 
 func (config *Config) ShouldDumpLabel(label *lard.Label) bool {
