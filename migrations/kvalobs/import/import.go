@@ -18,12 +18,12 @@ type Config struct {
 	Path     string     `arg:"-p" default:"./dumps" help:"Location the dumped data will be stored in"`
 	FromTime *time.Time `arg:"--from" help:"Fetch data only starting from this timestamp"`
 	ToTime   *time.Time `arg:"--to" help:"Fetch data only until this timestamp"`
-	Ts       []int32    `help:"Optional comma separated list of timeseries. By default all available timeseries are processed"`
-	Stations []int32    `help:"Optional comma separated list of station numbers. By default all available station numbers are processed"`
-	TypeIds  []int32    `help:"Optional comma separated list of type IDs. By default all available type IDs are processed"`
-	ParamIds []int32    `help:"Optional comma separated list of param IDs. By default all available param IDs are processed"`
-	Sensors  []int32    `help:"Optional comma separated list of sensors. By default all available sensors are processed"`
-	Levels   []int32    `help:"Optional comma separated list of levels. By default all available levels are processed"`
+	Ts       []int32    `help:"Optional space separated list of timeseries."`
+	Stations []int32    `help:"Optional space separated list of station numbers."`
+	TypeIds  []int32    `help:"Optional space separated list of type IDs."`
+	ParamIds []int32    `help:"Optional space separated list of param IDs."`
+	Sensors  []int32    `help:"Optional space separated list of sensors."`
+	Levels   []int32    `help:"Optional space separated list of levels."`
 }
 
 func (config *Config) ShouldImport(ts *lard.Label) bool {
