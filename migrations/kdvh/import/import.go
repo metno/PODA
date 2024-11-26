@@ -77,27 +77,20 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 				}
 
 				var count int64
-				if !(config.Skip == "data") {
-					if tsInfo.Param.IsScalar {
-						count, err = lard.InsertData(data, pool, tsInfo.Logstr)
-						if err != nil {
-							slog.Error(tsInfo.Logstr + "failed data bulk insertion - " + err.Error())
-							return
-						}
-					} else {
-						count, err = lard.InsertTextData(text, pool, tsInfo.Logstr)
-						if err != nil {
-							slog.Error(tsInfo.Logstr + "failed non-scalar data bulk insertion - " + err.Error())
-							return
-						}
-						// TODO: should we skip inserting flags here? In kvalobs there are no flags for text data
-						// return count, nil
+				if tsInfo.Param.IsScalar {
+					count, err = lard.InsertData(data, pool, tsInfo.Logstr)
+					if err != nil {
+						slog.Error(tsInfo.Logstr + "failed data bulk insertion - " + err.Error())
+						return
 					}
-				}
-
-				if !(config.Skip == "flags") {
 					if err := lard.InsertFlags(flag, pool, tsInfo.Logstr); err != nil {
 						slog.Error(tsInfo.Logstr + "failed flag bulk insertion - " + err.Error())
+					}
+				} else {
+					count, err = lard.InsertTextData(text, pool, tsInfo.Logstr)
+					if err != nil {
+						slog.Error(tsInfo.Logstr + "failed non-scalar data bulk insertion - " + err.Error())
+						return
 					}
 				}
 
