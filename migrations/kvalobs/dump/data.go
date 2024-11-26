@@ -15,7 +15,7 @@ import (
 
 const DATA_LABEL_CSV string = "data_labels.csv"
 
-func (config *Config) DumpData(outpath string, pool *pgxpool.Pool) {
+func (config *Config) dumpData(outpath string, pool *pgxpool.Pool) {
 	var labels []*lard.Label
 
 	dataPath := filepath.Join(outpath, "data")

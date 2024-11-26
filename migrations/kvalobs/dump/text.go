@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func DumpText(path string, pool *pgxpool.Pool, config *Config) {
+func dumpText(path string, pool *pgxpool.Pool, config *Config) {
 	var labels []*lard.Label
 
 	textPath := filepath.Join(path, "text")

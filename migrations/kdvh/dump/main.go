@@ -12,21 +12,21 @@ import (
 	"migrate/utils"
 )
 
-type DumpConfig struct {
-	BaseDir   string   `short:"p" long:"path" default:"./dumps/kdvh" description:"Location the dumped data will be stored in"`
-	Tables    []string `short:"t" delimiter:"," long:"table" default:"" description:"Optional comma separated list of table names. By default all available tables are processed"`
-	Stations  []string `short:"s" delimiter:"," long:"stnr" default:"" description:"Optional comma separated list of stations IDs. By default all station IDs are processed"`
-	Elements  []string `short:"e" delimiter:"," long:"elem" default:"" description:"Optional comma separated list of element codes. By default all element codes are processed"`
-	Overwrite bool     `long:"overwrite" description:"Overwrite any existing dumped files"`
-	Email     []string `long:"email" delimiter:"," description:"Optional comma separated list of email addresses used to notify if the program crashed"`
-	MaxConn   int      `short:"n" long:"conn" default:"4" description:"Max number of concurrent connections allowed to KDVH"`
+type Config struct {
+	BaseDir   string   `arg:"-p,--path" default:"./dumps/kdvh" help:"Location the dumped data will be stored in"`
+	Tables    []string `arg:"-t" help:"Optional comma separated list of table names. By default all available tables are processed"`
+	Stations  []string `arg:"-s" help:"Optional comma separated list of stations IDs. By default all station IDs are processed"`
+	Elements  []string `arg:"-e" help:"Optional comma separated list of element codes. By default all element codes are processed"`
+	Overwrite bool     `help:"Overwrite any existing dumped files"`
+	Email     []string `help:"Optional comma separated list of email addresses used to notify if the program crashed"`
+	MaxConn   int      `arg:"-n,--conn" default:"4" help:"Max number of concurrent connections allowed to KDVH"`
 }
 
-func (config *DumpConfig) Execute([]string) error {
+func (config *Config) Execute() {
 	pool, err := pgxpool.New(context.Background(), os.Getenv("KDVH_PROXY_CONN"))
 	if err != nil {
 		slog.Error(err.Error())
-		return nil
+		return
 	}
 
 	kdvh := db.Init()
@@ -38,6 +38,4 @@ func (config *DumpConfig) Execute([]string) error {
 		utils.SetLogFile(table.TableName, "dump")
 		DumpTable(table, pool, config)
 	}
-
-	return nil
 }

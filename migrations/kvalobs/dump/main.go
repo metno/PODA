@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -25,15 +24,15 @@ import (
 // func joinTS(first, second []lard.Label)
 
 type Config struct {
-	BaseDir  string     `short:"p" long:"path" default:"./dumps" description:"Location the dumped data will be stored in"`
-	FromTime *time.Time `long:"from" description:"Fetch data only starting from this timestamp"`
-	ToTime   *time.Time `long:"to" description:"Fetch data only until this timestamp"`
-	// Ts       []int32    `long:"ts" description:"Optional comma separated list of timeseries. By default all available timeseries are processed"`
-	Stations []int32 `long:"station" description:"Optional comma separated list of station numbers. By default all available station numbers are processed"`
-	TypeIds  []int32 `long:"typeid" description:"Optional comma separated list of type IDs. By default all available type IDs are processed"`
-	ParamIds []int32 `long:"paramid" description:"Optional comma separated list of param IDs. By default all available param IDs are processed"`
-	Sensors  []int32 `long:"sensor" description:"Optional comma separated list of sensors. By default all available sensors are processed"`
-	Levels   []int32 `long:"level" description:"Optional comma separated list of levels. By default all available levels are processed"`
+	BaseDir  string           `arg:"-p,--path" default:"./dumps" help:"Location the dumped data will be stored in."`
+	FromTime *utils.Timestamp `arg:"--from" help:"Fetch data only starting from this (date-only) timestamp. For example, '2006-01-01'"`
+	ToTime   *utils.Timestamp `arg:"--to" help:"Fetch data only until this (date-only) timestamp. For example, '2006-01-01'"`
+	// Ts       []int32    `long:"ts" help:"Optional comma separated list of timeseries. By default all available timeseries are processed"`
+	Stations []int32 `help:"Optional space separated list of station numbers."`
+	TypeIds  []int32 `help:"Optional space separated list of type IDs."`
+	ParamIds []int32 `help:"Optional space separated list of param IDs."`
+	Sensors  []int32 `help:"Optional space separated list of sensors."`
+	Levels   []int32 `help:"Optional space separated list of levels."`
 }
 
 func (config *Config) ShouldDumpLabel(label *lard.Label) bool {
@@ -46,15 +45,13 @@ func (config *Config) ShouldDumpLabel(label *lard.Label) bool {
 		utils.NullableContains(config.Levels, label.Level)
 }
 
-func (config *Config) Execute(_ []string) error {
+func (config *Config) Execute() {
 	// dump kvalobs
 	config.dump("KVALOBS_CONN_STRING", filepath.Join(config.BaseDir, "kvalobs"))
 
 	// dump histkvalobs
 	// TODO: maybe it's worth adding a separate flag?
 	config.dump("HISTKVALOBS_CONN_STRING", filepath.Join(config.BaseDir, "histkvalobs"))
-
-	return nil
 }
 
 func (config *Config) dump(envvar, path string) {
