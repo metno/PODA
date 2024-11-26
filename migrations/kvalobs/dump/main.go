@@ -24,9 +24,9 @@ import (
 // func joinTS(first, second []lard.Label)
 
 type Config struct {
-	BaseDir  string           `arg:"-p,--path" default:"./dumps" help:"Location the dumped data will be stored in."`
-	FromTime *utils.Timestamp `arg:"--from" help:"Fetch data only starting from this (date-only) timestamp. For example, '2006-01-01'"`
-	ToTime   *utils.Timestamp `arg:"--to" help:"Fetch data only until this (date-only) timestamp. For example, '2006-01-01'"`
+	Path     string           `arg:"-p" default:"./dumps" help:"Location the dumped data will be stored in"`
+	FromTime *utils.Timestamp `arg:"--from" help:"Fetch data only starting from this date-only timestamp"`
+	ToTime   *utils.Timestamp `arg:"--to" help:"Fetch data only until this date-only timestamp"`
 	// Ts       []int32    `long:"ts" help:"Optional comma separated list of timeseries. By default all available timeseries are processed"`
 	Stations []int32 `help:"Optional space separated list of station numbers."`
 	TypeIds  []int32 `help:"Optional space separated list of type IDs."`
@@ -47,11 +47,11 @@ func (config *Config) ShouldDumpLabel(label *lard.Label) bool {
 
 func (config *Config) Execute() {
 	// dump kvalobs
-	config.dump("KVALOBS_CONN_STRING", filepath.Join(config.BaseDir, "kvalobs"))
+	config.dump("KVALOBS_CONN_STRING", filepath.Join(config.Path, "kvalobs"))
 
 	// dump histkvalobs
 	// TODO: maybe it's worth adding a separate flag?
-	config.dump("HISTKVALOBS_CONN_STRING", filepath.Join(config.BaseDir, "histkvalobs"))
+	config.dump("HISTKVALOBS_CONN_STRING", filepath.Join(config.Path, "histkvalobs"))
 }
 
 func (config *Config) dump(envvar, path string) {

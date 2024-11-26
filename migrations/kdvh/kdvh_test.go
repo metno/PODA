@@ -29,7 +29,7 @@ func (t *ImportTest) mockConfig() (*port.Config, *cache.Cache) {
 			Tables:    []string{t.table},
 			Stations:  []string{fmt.Sprint(t.station)},
 			Elements:  []string{t.elem},
-			BaseDir:   "./tests",
+			Path:      "./tests",
 			HasHeader: true,
 			Sep:       ";",
 		},
