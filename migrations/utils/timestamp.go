@@ -1,6 +1,9 @@
 package utils
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 type Timestamp struct {
 	t time.Time
@@ -9,7 +12,7 @@ type Timestamp struct {
 func (ts *Timestamp) UnmarshalText(b []byte) error {
 	t, err := time.Parse(time.DateOnly, string(b))
 	if err != nil {
-		return err
+		return fmt.Errorf("Only the date-only format (\"YYYY-MM-DD\") is allowed. Got \"%s\"", b)
 	}
 	ts.t = t
 	return nil
