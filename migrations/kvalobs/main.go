@@ -134,7 +134,8 @@ func (c *Cmd) Execute(parser *arg.Parser) {
 	case c.Import != nil:
 		c.Import.Execute()
 	default:
-		fmt.Println("Error: passing a subcommand is required.\n")
+		fmt.Println("Error: passing a subcommand is required.")
+		fmt.Println()
 		parser.WriteHelpForSubcommand(os.Stdout, "kvalobs")
 	}
 }
