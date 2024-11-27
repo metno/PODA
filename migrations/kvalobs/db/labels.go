@@ -21,7 +21,7 @@ func LabelToFilename(ts *lard.Label) string {
 	return fmt.Sprintf("%v_%v_%v_%v_%v.csv", ts.StationID, ts.TypeID, ts.ParamID, sensor, level)
 }
 
-func parseFilename(s *string) (*int32, error) {
+func parseFilenameFields(s *string) (*int32, error) {
 	// TODO: probably there is a better way to do this without defining a gazillion functions
 	if *s == "" {
 		return nil, nil
@@ -37,6 +37,7 @@ func parseFilename(s *string) (*int32, error) {
 // Deserialize filename to lard.Label
 func LabelFromFilename(filename string) (*lard.Label, error) {
 	name := strings.TrimSuffix(filename, ".csv")
+
 	fields := strings.Split(name, "_")
 	if len(fields) < 5 {
 		return nil, errors.New("Too few fields in file name: " + filename)
@@ -47,7 +48,7 @@ func LabelFromFilename(filename string) (*lard.Label, error) {
 		ptrs[i] = &fields[i]
 	}
 
-	converted, err := utils.TryMap(ptrs, parseFilename)
+	converted, err := utils.TryMap(ptrs, parseFilenameFields)
 	if err != nil {
 		return nil, err
 	}
