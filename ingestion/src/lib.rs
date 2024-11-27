@@ -96,7 +96,7 @@ impl FromRef<IngestorState> for Arc<RwLock<(ParamPermitTable, StationPermitTable
 /// Represents the different Data types observation can have
 #[derive(Debug, PartialEq)]
 pub enum ObsType<'a> {
-    Scalar(f32),
+    Scalar(Option<f32>),
     NonScalar(&'a str),
 }
 
