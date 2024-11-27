@@ -463,6 +463,15 @@ mod tests {
         ]);
         "match 3"
     )]
+    #[test_case(
+        " TA(1,1), TAX,TAN ,TD (0,0)" => Ok(vec![
+            ObsinnId{param_code: "TA".to_string(), sensor_and_level: Some((1,1))},
+            ObsinnId{param_code: "TAX".to_string(), sensor_and_level: None},
+            ObsinnId{param_code: "TAN".to_string(), sensor_and_level: None},
+            ObsinnId{param_code: "TD".to_string(), sensor_and_level: Some((0,0))},
+        ]);
+        "trim test"
+    )]
     // NOTE: cases not taken into account here
     // - "()"             => Vec::new()
     // - "param(0.1,0)" => vec[param, 0.1, 0]
