@@ -41,7 +41,8 @@ func main() {
 	case args.Kvalobs != nil:
 		args.Kvalobs.Execute(parser)
 	default:
-		fmt.Println("Error: passing a subcommand is required.\n")
+		fmt.Println("Error: passing a subcommand is required.")
+		fmt.Println()
 		parser.WriteHelp(os.Stdout)
 	}
 }

@@ -27,7 +27,8 @@ func (c *Cmd) Execute(parser *arg.Parser) {
 	case c.List != nil:
 		c.List.Execute()
 	default:
-		fmt.Println("Error: passing a subcommand is required.\n")
+		fmt.Println("Error: passing a subcommand is required.")
+		fmt.Println()
 		parser.WriteHelpForSubcommand(os.Stdout, "kdvh")
 	}
 }
