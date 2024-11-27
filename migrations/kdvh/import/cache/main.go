@@ -98,7 +98,7 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 		Level:     param.Hlevel,
 	}
 
-	tsid, err := lard.GetTimeseriesID(&label, param.Fromtime, pool)
+	tsid, err := lard.GetTimeseriesID(&label, &param.Fromtime, pool)
 	if err != nil {
 		slog.Error(logstr + "could not obtain timeseries - " + err.Error())
 		return nil, err
