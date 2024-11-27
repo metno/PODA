@@ -173,6 +173,7 @@ fn mock_permit_tables() -> Arc<RwLock<(ParamPermitTable, StationPermitTable)>> {
     Arc::new(RwLock::new((param_permit, station_permit)))
 }
 
+// TODO: add test for missing param id
 #[test_case(0, 0, 0 => false; "stationid not in permit_tables")]
 #[test_case(10000, 0, 0 => false; "stationid in ParamPermitTable, timeseries closed")]
 #[test_case(10001, 0, 0 => true; "stationid in ParamPermitTable, timeseries open")]
@@ -180,7 +181,7 @@ fn mock_permit_tables() -> Arc<RwLock<(ParamPermitTable, StationPermitTable)>> {
 #[test_case(20001, 0, 1 => true; "stationid in StationPermitTable, timeseries open")]
 fn test_timeseries_is_open(station_id: i32, type_id: i32, permit_id: i32) -> bool {
     let permit_tables = mock_permit_tables();
-    timeseries_is_open(permit_tables, station_id, type_id, permit_id).unwrap()
+    timeseries_is_open(permit_tables, station_id, type_id, Some(permit_id)).unwrap()
 }
 
 async fn e2e_test_wrapper<T: Future<Output = ()>>(test: T) {
