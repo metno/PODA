@@ -21,3 +21,11 @@ func (ts *Timestamp) UnmarshalText(b []byte) error {
 func (ts *Timestamp) Format(layout string) string {
 	return ts.t.Format(layout)
 }
+
+func (ts *Timestamp) Inner() *time.Time {
+	if ts == nil {
+		return nil
+	}
+
+	return &ts.t
+}
