@@ -91,7 +91,7 @@ func Map[T, V any](ts []T, fn func(T) V) []V {
 	return result
 }
 
-// Similar to Map, but bails immediately if an error occurs
+// Similar to Map, but bails immediately if any error occurs
 func TryMap[T, V any](ts []T, fn func(T) (V, error)) ([]V, error) {
 	result := make([]V, len(ts))
 	for i, t := range ts {
@@ -104,6 +104,8 @@ func TryMap[T, V any](ts []T, fn func(T) (V, error)) ([]V, error) {
 	return result, nil
 }
 
+// Same as slices.Contains but return `true` if the slice is nil,
+// meaning that upstream the slice is optional
 func Contains[T comparable](s []T, v T) bool {
 	if s == nil {
 		return true
@@ -111,10 +113,15 @@ func Contains[T comparable](s []T, v T) bool {
 	return slices.Contains(s, v)
 }
 
-// Returns true if the slice is empty or the value is null
 func NullableContains[T comparable](s []T, v *T) bool {
-	if s == nil || v == nil {
+	if s == nil {
 		return true
 	}
+
+	if v == nil {
+		// Non-nil slice does not contain nil
+		return false
+	}
+
 	return slices.Contains(s, *v)
 }

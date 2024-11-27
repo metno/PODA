@@ -9,8 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"migrate/lard"
-	"migrate/utils"
+	"migrate/kvalobs/db"
 )
 
 // Same timeseries could be in both 'data' and 'text_data' tables
@@ -25,25 +24,8 @@ import (
 // func joinTS(first, second []lard.Label)
 
 type Config struct {
-	Path     string           `arg:"-p" default:"./dumps" help:"Location the dumped data will be stored in"`
-	FromTime *utils.Timestamp `arg:"--from" help:"Fetch data only starting from this date-only timestamp"`
-	ToTime   *utils.Timestamp `arg:"--to" help:"Fetch data only until this date-only timestamp"`
-	// Ts       []int32    `long:"ts" help:"Optional comma separated list of timeseries. By default all available timeseries are processed"`
-	Stations []int32 `help:"Optional space separated list of station numbers"`
-	TypeIds  []int32 `help:"Optional space separated list of type IDs"`
-	ParamIds []int32 `help:"Optional space separated list of param IDs"`
-	Sensors  []int32 `help:"Optional space separated list of sensors"`
-	Levels   []int32 `help:"Optional space separated list of levels"`
-}
-
-func (config *Config) ShouldDumpLabel(label *lard.Label) bool {
-	// (config.Ts == nil || slices.Contains(config.Ts, ts.ID)) ||
-	return utils.Contains(config.Stations, label.StationID) ||
-		utils.Contains(config.TypeIds, label.TypeID) ||
-		utils.Contains(config.ParamIds, label.ParamID) ||
-		// TODO: these two should never be null anyway
-		utils.NullableContains(config.Sensors, label.Sensor) ||
-		utils.NullableContains(config.Levels, label.Level)
+	db.BaseConfig
+	UpdateLabels bool `help:"Overwrites the label CSV files"`
 }
 
 func (config *Config) Execute() {
