@@ -3,95 +3,14 @@ package dump
 import (
 	"context"
 	"log/slog"
-	"migrate/kvalobs/db"
-	"migrate/lard"
-	"os"
-	"path/filepath"
 
-	"github.com/gocarina/gocsv"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"migrate/kvalobs/db"
 )
 
-func dumpText(path string, pool *pgxpool.Pool, config *Config) {
-	var labels []*lard.Label
-
-	textPath := filepath.Join(path, "text")
-	if err := os.MkdirAll(textPath, os.ModePerm); err != nil {
-		slog.Error(err.Error())
-		return
-	}
-
-	labelFile := filepath.Join(path, "labels.csv")
-	if _, err := os.Stat(labelFile); err != nil {
-		if labels, err = dumpLabels(pool, labelFile, getTextLabels, config); err != nil {
-			return
-		}
-	} else {
-		if labels, err = db.ReadLabelCSV(labelFile); err != nil {
-			return
-		}
-	}
-
-	for _, ts := range labels {
-		if !config.ShouldDumpLabel(ts) {
-			continue
-		}
-
-		// TODO: Dump per station? Not strictly necessary? But makes it more organized?
-		stationDir := filepath.Join(textPath, string(ts.StationID))
-		if err := os.MkdirAll(stationDir, os.ModePerm); err != nil {
-			slog.Error(err.Error())
-			return
-		}
-
-		data, err := readTextData(ts, pool, config)
-		if err != nil {
-			continue
-		}
-
-		filename := filepath.Join(textPath, string(ts.StationID), db.LabelToFilename(ts))
-		file, err := os.Create(filename)
-		if err != nil {
-			slog.Error(err.Error())
-			continue
-		}
-
-		slog.Info("Writing text to " + filename)
-		if err = gocsv.MarshalFile(data, file); err != nil {
-			slog.Error(err.Error())
-			continue
-		}
-	}
-}
-
-func (config *Config) dumpTextTS(pool *pgxpool.Pool) {
-	timeseries, err := getTextLabels(pool, config)
-	if err != nil {
-		// Error logged inside getTextTS
-		return
-	}
-
-	if err := os.MkdirAll(config.Path, os.ModePerm); err != nil {
-		slog.Error(err.Error())
-		return
-	}
-
-	path := filepath.Join(config.Path, "text_timeseries.csv")
-	file, err := os.Create(path)
-	if err != nil {
-		slog.Error(err.Error())
-		return
-	}
-
-	slog.Info("Writing timeseries labels to CSV")
-	if err = gocsv.Marshal(timeseries, file); err != nil {
-		slog.Error(err.Error())
-		return
-	}
-}
-
-func getTextLabels(pool *pgxpool.Pool, config *Config) ([]*lard.Label, error) {
+func getTextLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.Label[string], error) {
 	// OGquery := `SELECT DISTINCT
 	//            stationid,
 	//            typeid,
@@ -130,24 +49,23 @@ func getTextLabels(pool *pgxpool.Pool, config *Config) ([]*lard.Label, error) {
 	query := `SELECT DISTINCT stationid, typeid, paramid, NULL AS sensor, NULL AS level FROM text_data
               WHERE ($1::timestamp IS NULL OR obstime >= $1) AND ($2::timestamp IS NULL OR obstime < $2)`
 
-	slog.Info("Querying distinct timeseries labels")
-	rows, err := pool.Query(context.TODO(), query, config.FromTime, config.ToTime)
+	slog.Info("Querying text labels...")
+	rows, err := pool.Query(context.TODO(), query, timespan.From, timespan.To)
 	if err != nil {
-		slog.Error(err.Error())
 		return nil, err
 	}
 
-	slog.Info("Collecting rows to slice")
-	tsList, err := pgx.CollectRows(rows, pgx.RowToStructByName[*lard.Label])
+	slog.Info("Collecting text labels...")
+	labels := make([]*db.Label[string], 0, rows.CommandTag().RowsAffected())
+	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.Label[string]])
 	if err != nil {
-		slog.Error(err.Error())
 		return nil, err
 	}
 
-	return tsList, nil
+	return labels, nil
 }
 
-func readTextData(label *lard.Label, pool *pgxpool.Pool, config *Config) (db.Text, error) {
+func getTextSeries(label *db.Label[string], timespan *TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
 	// query := `
 	//        SELECT
 	//            obstime,
@@ -171,8 +89,7 @@ func readTextData(label *lard.Label, pool *pgxpool.Pool, config *Config) (db.Tex
                   AND paramid = $3
                   AND ($4::timestamp IS NULL OR obstime >= $4)
                   AND ($5::timestamp IS NULL OR obstime < $5)
-                ORDER BY 
-                    stationid, obstime`
+                ORDER BY obstime`
 
 	rows, err := pool.Query(
 		context.TODO(),
@@ -180,17 +97,15 @@ func readTextData(label *lard.Label, pool *pgxpool.Pool, config *Config) (db.Tex
 		label.StationID,
 		label.TypeID,
 		label.ParamID,
-		config.FromTime,
-		config.ToTime,
+		timespan.From,
+		timespan.To,
 	)
 	if err != nil {
-		slog.Error(err.Error())
 		return nil, err
 	}
 
-	data, err := pgx.CollectRows(rows, pgx.RowToStructByName[*db.TextObs])
+	data, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[db.TextObs])
 	if err != nil {
-		slog.Error(err.Error())
 		return nil, err
 	}
 

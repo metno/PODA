@@ -13,7 +13,7 @@ import (
 )
 
 type Config struct {
-	db.BaseConfig
+	db.BaseConfig[int32]
 	Ts []int32 `help:"Optional space separated list of timeseries."`
 }
 

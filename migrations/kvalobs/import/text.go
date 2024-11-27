@@ -25,11 +25,13 @@ func (config *Config) ImportText(pool *pgxpool.Pool, path string) error {
 			continue
 		}
 
-		if !config.ShouldImport(label) {
+		if !config.ShouldProcessLabel(label) {
 			continue
 		}
 
-		tsid, err := lard.GetTimeseriesID(label, *config.FromTime, pool)
+		// FIXME: FromTime can be nil
+		lardLabel := lard.Label(*label)
+		tsid, err := lard.GetTimeseriesID(&lardLabel, config.FromTime.Inner(), pool)
 		if err != nil {
 			slog.Error(err.Error())
 			continue

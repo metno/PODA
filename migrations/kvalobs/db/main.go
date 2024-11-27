@@ -108,3 +108,8 @@ type TextObs struct {
 	Original string    `db:"original"`
 	Tbtime   time.Time `db:"tbtime"`
 }
+
+type Kvalobs struct {
+	Name       string
+	ConnEnvVar string
+}
