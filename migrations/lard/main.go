@@ -45,7 +45,7 @@ type Flag struct {
 	// Flag encoding quality control status
 	Useinfo *string
 	// Number of tests that failed?
-	Cfailed *int32
+	Cfailed *string
 }
 
 func (o *Flag) ToRow() []any {

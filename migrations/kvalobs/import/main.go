@@ -15,10 +15,11 @@ import (
 
 type Config struct {
 	db.BaseConfig[int32]
-	Ts []int32 `help:"Optional space separated list of timeseries."`
 }
 
 func (config *Config) Execute() error {
+	permits := lard.NewPermitTables()
+
 	pool, err := pgxpool.New(context.Background(), os.Getenv(lard.LARD_ENV_VAR))
 	if err != nil {
 		slog.Error(fmt.Sprint("Could not connect to Kvalobs:", err))
@@ -28,11 +29,11 @@ func (config *Config) Execute() error {
 	kvalobs, histkvalobs := db.InitDBs()
 
 	if config.ChosenDB(kvalobs.Name) {
-		// dumpDB(kvalobs, dataTable, textTable, config)
+		ImportDB(kvalobs, permits, pool, config)
 	}
 
 	if config.ChosenDB(histkvalobs.Name) {
-		// dumpDB(histkvalobs, dataTable, textTable, config)
+		ImportDB(histkvalobs, permits, pool, config)
 	}
 
 	return nil

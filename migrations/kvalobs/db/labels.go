@@ -20,6 +20,8 @@ type Label[T int32 | string] struct {
 
 // Can be directly casted to lard.Label
 type LardLabel = Label[int32]
+
+// Kvalobs specific
 type KvLabel = Label[string]
 
 func (l *Label[T]) sensorLevelString() (string, string) {
@@ -51,7 +53,6 @@ func (l *Label[T]) ToString() string {
 }
 
 func parseFilenameFields(s *string) (*int32, error) {
-	// TODO: probably there is a better way to do this without defining a gazillion functions
 	if *s == "" {
 		return nil, nil
 	}
