@@ -16,7 +16,19 @@ import (
 	"migrate/utils"
 )
 
-func writeLabels(path string, labels []*db.KvLabel) error {
+func readLabelCSV(filename string) (labels []*db.KvLabel, err error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	// TODO: maybe I should preallocate slice size if I can?
+	err = gocsv.UnmarshalFile(file, &labels)
+	return labels, err
+}
+
+func writeLabelCSV(path string, labels []*db.KvLabel) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -30,7 +42,8 @@ func writeLabels(path string, labels []*db.KvLabel) error {
 	return nil
 }
 
-func writeSeries[S db.DataSeries | db.TextSeries](series S, path string, label *db.KvLabel) error {
+// TODO: add number of rows as header row
+func writeSeriesCSV[S db.DataSeries | db.TextSeries](series S, path string, label *db.KvLabel) error {
 	filename := filepath.Join(path, label.ToFilename())
 	file, err := os.Create(filename)
 	if err != nil {
@@ -45,35 +58,37 @@ func writeSeries[S db.DataSeries | db.TextSeries](series S, path string, label *
 	return nil
 }
 
-func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], pool *pgxpool.Pool, config *Config) {
-	var labels []*db.KvLabel
+func getLabels[T db.DataSeries | db.TextSeries](table db.Table[T], pool *pgxpool.Pool, config *Config) (labels []*db.KvLabel, err error) {
+	labelFile := table.Path + "_labels.csv"
 
-	timespan := config.TimeSpan()
-
-	labelFile := filepath.Join(path, table.Name+"_labels.csv")
 	if _, err := os.Stat(labelFile); err != nil || config.UpdateLabels {
-		labels, err = table.LabelFn(timespan, pool)
+		labels, err = table.DumpLabels(config.TimeSpan(), pool)
 		if err != nil {
-			slog.Error(err.Error())
-			return
+			return nil, err
 		}
-		if err = writeLabels(labelFile, labels); err != nil {
-			slog.Error(err.Error())
-			return
-		}
-	} else {
-		if labels, err = db.ReadLabelCSV(labelFile); err != nil {
-			slog.Error(err.Error())
-			return
-		}
+
+		err = writeLabelCSV(labelFile, labels)
+		return labels, err
 	}
 
-	path = filepath.Join(path, table.Name)
-	utils.SetLogFile(path, "dump")
+	return readLabelCSV(labelFile)
+}
+
+func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool.Pool, config *Config) {
+	var labels []*db.KvLabel
+
+	labels, err := getLabels(table, pool, config)
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
+
+	timespan := config.TimeSpan()
+	utils.SetLogFile(table.Path, "dump")
 
 	// TODO: this bar is a bit deceiving if you don't dump all the labels
 	// Maybe should only cache the ones requested from cli?
-	bar := utils.NewBar(len(labels), path)
+	bar := utils.NewBar(len(labels), table.Path)
 
 	// Used to limit connections to the database
 	semaphore := make(chan struct{}, config.MaxConn)
@@ -87,7 +102,7 @@ func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], poo
 			continue
 		}
 
-		thisPath := filepath.Join(path, fmt.Sprint(label.StationID))
+		thisPath := filepath.Join(table.Path, fmt.Sprint(label.StationID))
 		if thisPath != stationPath {
 			stationPath = thisPath
 			if err := os.MkdirAll(stationPath, os.ModePerm); err != nil {
@@ -105,13 +120,13 @@ func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], poo
 				<-semaphore
 			}()
 
-			series, err := table.ObsFn(label, timespan, pool)
+			series, err := table.DumpSeries(label, timespan, pool)
 			if err != nil {
 				slog.Error(err.Error())
 				return
 			}
 
-			if err := writeSeries(series, stationPath, label); err != nil {
+			if err := writeSeriesCSV(series, stationPath, label); err != nil {
 				slog.Error(err.Error())
 				return
 			}
@@ -138,23 +153,11 @@ func dumpDB(database db.DB, config *Config) {
 		return
 	}
 
-	dataTable := Table[db.DataSeries]{
-		Name:    db.DATA_TABLE_NAME,
-		LabelFn: getDataLabels,
-		ObsFn:   getDataSeries,
+	if config.ChosenTable(db.DATA_TABLE_NAME) {
+		dumpTable(DataTable(path), pool, config)
 	}
 
-	textTable := Table[db.TextSeries]{
-		Name:    db.TEXT_TABLE_NAME,
-		LabelFn: getTextLabels,
-		ObsFn:   getTextSeries,
-	}
-
-	if config.ChosenTable(dataTable.Name) {
-		dumpTable(path, dataTable, pool, config)
-	}
-
-	if config.ChosenTable(textTable.Name) {
-		dumpTable(path, textTable, pool, config)
+	if config.ChosenTable(db.TEXT_TABLE_NAME) {
+		dumpTable(TextTable(path), pool, config)
 	}
 }

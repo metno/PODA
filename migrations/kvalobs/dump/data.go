@@ -3,6 +3,7 @@ package dump
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,7 +12,16 @@ import (
 	"migrate/utils"
 )
 
-func getDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
+// Returns a DataTable for dump
+func DataTable(path string) db.DataTable {
+	return db.DataTable{
+		Path:       filepath.Join(path, db.DATA_TABLE_NAME),
+		DumpLabels: dumpDataLabels,
+		DumpSeries: dumpDataSeries,
+	}
+}
+
+func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
 	// TODO: not sure about the sensor/level conditions,
 	// they should never be NULL since they have default values different from NULL?
 	// TODO: We probably don't even need the join,
@@ -43,7 +53,7 @@ func getDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel,
 	return labels, nil
 }
 
-func getDataSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
+func dumpDataSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
 	// TODO: is the case useful here, we can just check for cfailed = '' in here
 	// query := `SELECT
 	// 			obstime,

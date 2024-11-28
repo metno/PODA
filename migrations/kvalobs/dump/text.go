@@ -3,6 +3,7 @@ package dump
 import (
 	"context"
 	"log/slog"
+	"path/filepath"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,7 +12,16 @@ import (
 	"migrate/utils"
 )
 
-func getTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
+// Returns a TextTable for dump
+func TextTable(path string) db.TextTable {
+	return db.TextTable{
+		Path:       filepath.Join(path, db.TEXT_TABLE_NAME),
+		DumpLabels: dumpTextLabels,
+		DumpSeries: dumpTextSeries,
+	}
+}
+
+func dumpTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
 	// OGquery := `SELECT DISTINCT
 	//            stationid,
 	//            typeid,
@@ -67,7 +77,7 @@ func getTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel,
 	return labels, nil
 }
 
-func getTextSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
+func dumpTextSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
 	// query := `
 	//        SELECT
 	//            obstime,
