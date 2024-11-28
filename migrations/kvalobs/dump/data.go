@@ -10,7 +10,7 @@ import (
 	"migrate/kvalobs/db"
 )
 
-func getDataLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.Label[string], error) {
+func getDataLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
 	// TODO: not sure about the sensor/level conditions,
 	// they should never be NULL since they have default values different from NULL?
 	// TODO: We probably don't even need the join,
@@ -32,8 +32,8 @@ func getDataLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.Label[string],
 	}
 
 	slog.Info("Collecting data labels...")
-	labels := make([]*db.Label[string], 0, rows.CommandTag().RowsAffected())
-	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.Label[string]])
+	labels := make([]*db.KvLabel, 0, rows.CommandTag().RowsAffected())
+	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.KvLabel])
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func getDataLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.Label[string],
 	return labels, nil
 }
 
-func getDataSeries(label *db.Label[string], timespan *TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
+func getDataSeries(label *db.KvLabel, timespan *TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
 	// TODO: is the case useful here, we can just check for cfailed = '' in here
 	// query := `SELECT
 	// 			obstime,

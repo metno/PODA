@@ -14,7 +14,7 @@ import (
 	"migrate/utils"
 )
 
-func writeLabels[T int32 | string](path string, labels []*db.Label[T]) error {
+func writeLabels(path string, labels []*db.KvLabel) error {
 	file, err := os.Create(path)
 	if err != nil {
 		return err
@@ -28,7 +28,7 @@ func writeLabels[T int32 | string](path string, labels []*db.Label[T]) error {
 	return nil
 }
 
-func writeSeries[T int32 | string, S db.DataSeries | db.TextSeries](series S, path, table string, label *db.Label[T]) error {
+func writeSeries[S db.DataSeries | db.TextSeries](series S, path, table string, label *db.KvLabel) error {
 	filename := filepath.Join(path, label.ToFilename())
 	file, err := os.Create(filename)
 	if err != nil {
@@ -45,8 +45,8 @@ func writeSeries[T int32 | string, S db.DataSeries | db.TextSeries](series S, pa
 }
 
 // TODO: switch to log file
-func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[string, S], pool *pgxpool.Pool, config *Config) {
-	var labels []*db.Label[string]
+func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], pool *pgxpool.Pool, config *Config) {
+	var labels []*db.KvLabel
 
 	timespan := config.TimeSpan()
 
@@ -99,7 +99,7 @@ func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[string,
 	}
 }
 
-func dumpDB(database DB, dataTable Table[string, db.DataSeries], textTable Table[string, db.TextSeries], config *Config) {
+func dumpDB(database DB, dataTable Table[db.DataSeries], textTable Table[db.TextSeries], config *Config) {
 	pool, err := pgxpool.New(context.Background(), os.Getenv(database.ConnEnvVar))
 	if err != nil {
 		slog.Error(fmt.Sprint("Could not connect to Kvalobs:", err))

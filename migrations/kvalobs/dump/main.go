@@ -19,17 +19,17 @@ import (
 // TODO: not sure what to do with this one
 // func joinTS(first, second []lard.Label)
 
-type Table[T int32 | string, S db.DataSeries | db.TextSeries] struct {
+type Table[S db.DataSeries | db.TextSeries] struct {
 	Name    string
-	LabelFn LabelFunc[T]
-	ObsFn   ObsFunc[T, S]
+	LabelFn LabelFunc
+	ObsFn   ObsFunc[S]
 }
 
 // Function used to query labels from kvalobs given an optional timespan
-type LabelFunc[T int32 | string] func(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.Label[T], error)
+type LabelFunc func(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error)
 
 // Function used to query timeseries from kvalobs for a specific label
-type ObsFunc[T int32 | string, S db.DataSeries | db.TextSeries] func(label *db.Label[T], timespan *TimeSpan, pool *pgxpool.Pool) (S, error)
+type ObsFunc[S db.DataSeries | db.TextSeries] func(label *db.KvLabel, timespan *TimeSpan, pool *pgxpool.Pool) (S, error)
 
 type DB struct {
 	Name       string
@@ -41,6 +41,7 @@ type Config struct {
 	UpdateLabels bool   `help:"Overwrites the label CSV files"`
 	Database     string `arg:"--db" help:"Which database to dump from. Choices: ['kvalobs', 'histkvalobs']"`
 	Table        string `help:"Which table to dump. Choices: ['data', 'text']"`
+	MaxConn      int    `arg:"-n" default:"4" help:"Max number of concurrent connections allowed to KDVH"`
 }
 
 type TimeSpan struct {
@@ -64,13 +65,13 @@ func (config *Config) Execute() {
 	kvalobs := DB{Name: "kvalobs", ConnEnvVar: "KVALOBS_CONN_STRING"}
 	histkvalobs := DB{Name: "histkvalobs", ConnEnvVar: "HISTKVALOBS_CONN_STRING"}
 
-	dataTable := Table[string, db.DataSeries]{
+	dataTable := Table[db.DataSeries]{
 		Name:    "data",
 		LabelFn: getDataLabels,
 		ObsFn:   getDataSeries,
 	}
 
-	textTable := Table[string, db.TextSeries]{
+	textTable := Table[db.TextSeries]{
 		Name:    "text",
 		LabelFn: getTextLabels,
 		ObsFn:   getTextSeries,
