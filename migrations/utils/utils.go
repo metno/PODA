@@ -104,22 +104,25 @@ func TryMap[T, V any](ts []T, fn func(T) (V, error)) ([]V, error) {
 	return result, nil
 }
 
-// Same as slices.Contains but return `true` if the slice is nil,
-// meaning that upstream the slice is optional
-func Contains[T comparable](s []T, v T) bool {
+// Returns `true` if the slice is nil, otherwise checks if the element is
+// contained in the slice
+func IsEmptyOrContains[T comparable](s []T, v T) bool {
 	if s == nil {
 		return true
 	}
 	return slices.Contains(s, v)
 }
 
-func NullableContains[T comparable](s []T, v *T) bool {
+// Returns `true` if the slice is nil,
+// `false` if the element pointer is nil,
+// otherwise checks if the element is contained in the slice
+func IsEmptyOrContainsPtr[T comparable](s []T, v *T) bool {
 	if s == nil {
 		return true
 	}
 
 	if v == nil {
-		// Non-nil slice does not contain nil
+		// Nil value is definitely not contained in non-nil slice
 		return false
 	}
 

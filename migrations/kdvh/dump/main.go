@@ -18,11 +18,11 @@ type Config struct {
 	Stations  []string `arg:"-s" help:"Optional space separated list of stations IDs"`
 	Elements  []string `arg:"-e" help:"Optional space separated list of element codes"`
 	Overwrite bool     `help:"Overwrite any existing dumped files"`
-	MaxConn   int      `arg:"-n" default:"4" help:"Max number of concurrent connections allowed to KDVH"`
+	MaxConn   int      `arg:"-n" default:"4" help:"Max number of allowed concurrent connections to KDVH"`
 }
 
 func (config *Config) Execute() {
-	pool, err := pgxpool.New(context.Background(), os.Getenv("KDVH_PROXY_CONN"))
+	pool, err := pgxpool.New(context.Background(), os.Getenv(db.KDVH_ENV_VAR))
 	if err != nil {
 		slog.Error(err.Error())
 		return

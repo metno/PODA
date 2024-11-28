@@ -29,7 +29,7 @@ func (config *Config) ImportText(pool *pgxpool.Pool, path string) error {
 			continue
 		}
 
-		// FIXME: FromTime can be nil
+		// FIXME: FromTime can be nil and anyway config.FromTime is wrong here!
 		lardLabel := lard.Label(*label)
 		tsid, err := lard.GetTimeseriesID(&lardLabel, config.FromTime.Inner(), pool)
 		if err != nil {
@@ -37,7 +37,7 @@ func (config *Config) ImportText(pool *pgxpool.Pool, path string) error {
 			continue
 		}
 
-		if !utils.Contains(config.Ts, tsid) {
+		if !utils.IsEmptyOrContains(config.Ts, tsid) {
 			continue
 		}
 

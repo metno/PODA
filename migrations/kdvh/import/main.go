@@ -12,6 +12,7 @@ import (
 
 	"migrate/kdvh/db"
 	"migrate/kdvh/import/cache"
+	"migrate/lard"
 	"migrate/utils"
 )
 
@@ -42,7 +43,7 @@ func (config *Config) Execute() {
 	cache := cache.CacheMetadata(config.Tables, config.Stations, config.Elements, kdvh)
 
 	// Create connection pool for LARD
-	pool, err := pgxpool.New(context.TODO(), os.Getenv("LARD_STRING"))
+	pool, err := pgxpool.New(context.TODO(), os.Getenv(lard.LARD_ENV_VAR))
 	if err != nil {
 		slog.Error(fmt.Sprint("Could not connect to Lard:", err))
 		return
