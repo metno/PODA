@@ -23,7 +23,8 @@ func getDataLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error
 	//                AND ($1::timestamp IS NULL OR obstime >= $1)
 	//                AND ($2::timestamp IS NULL OR obstime < $2)`
 	query := `SELECT DISTINCT stationid, typeid, paramid, sensor::int, level FROM data
-              WHERE ($1::timestamp IS NULL OR obstime >= $1) AND ($2::timestamp IS NULL OR obstime < $2)`
+              WHERE ($1::timestamp IS NULL OR obstime >= $1) AND ($2::timestamp IS NULL OR obstime < $2)
+              ORDER BY stationid`
 
 	slog.Info("Querying data labels...")
 	rows, err := pool.Query(context.TODO(), query, timespan.From, timespan.To)

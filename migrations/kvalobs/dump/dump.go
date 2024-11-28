@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/gocarina/gocsv"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -44,7 +45,6 @@ func writeSeries[S db.DataSeries | db.TextSeries](series S, path, table string, 
 	return nil
 }
 
-// TODO: switch to log file
 func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], pool *pgxpool.Pool, config *Config) {
 	var labels []*db.KvLabel
 
@@ -68,35 +68,58 @@ func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], poo
 		}
 	}
 
+	path = filepath.Join(path, table.Name)
+	utils.SetLogFile(path, "dump")
+
 	// TODO: this bar is a bit deceiving if you don't dump all the labels
+	// Maybe should only cache the ones requested from cli?
 	bar := utils.NewBar(len(labels), path)
 
-	path = filepath.Join(path, table.Name)
-	if err := os.MkdirAll(path, os.ModePerm); err != nil {
-		slog.Error(err.Error())
-		return
-	}
+	// Used to limit connections to the database
+	semaphore := make(chan struct{}, config.MaxConn)
+	var wg sync.WaitGroup
 
+	var stationPath string
 	for _, label := range labels {
 		bar.Add(1)
+
+		thisPath := filepath.Join(path, fmt.Sprint(label.StationID))
+		if thisPath != stationPath {
+			stationPath = thisPath
+			if err := os.MkdirAll(stationPath, os.ModePerm); err != nil {
+				slog.Error(err.Error())
+				return
+			}
+		}
 
 		if !config.ShouldProcessLabel(label) {
 			continue
 		}
 
-		series, err := table.ObsFn(label, timespan, pool)
-		if err != nil {
-			slog.Error(err.Error())
-			continue
-		}
+		wg.Add(1)
+		semaphore <- struct{}{}
+		go func() {
+			defer func() {
+				wg.Done()
+				// Release semaphore
+				<-semaphore
+			}()
 
-		if err := writeSeries(series, path, table.Name, label); err != nil {
-			slog.Error(err.Error())
-			continue
-		}
+			series, err := table.ObsFn(label, timespan, pool)
+			if err != nil {
+				slog.Error(err.Error())
+				return
+			}
 
-		slog.Info(label.ToString() + ": dumped successfully")
+			if err := writeSeries(series, stationPath, table.Name, label); err != nil {
+				slog.Error(err.Error())
+				return
+			}
+
+			slog.Info(label.ToString() + ": dumped successfully")
+		}()
 	}
+	wg.Wait()
 }
 
 func dumpDB(database DB, dataTable Table[db.DataSeries], textTable Table[db.TextSeries], config *Config) {

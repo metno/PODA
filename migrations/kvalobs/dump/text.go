@@ -47,7 +47,8 @@ func getTextLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error
 	//
 	// TODO: should sensor/level be NULL or 0
 	query := `SELECT DISTINCT stationid, typeid, paramid, NULL AS sensor, NULL AS level FROM text_data
-              WHERE ($1::timestamp IS NULL OR obstime >= $1) AND ($2::timestamp IS NULL OR obstime < $2)`
+              WHERE ($1::timestamp IS NULL OR obstime >= $1) AND ($2::timestamp IS NULL OR obstime < $2)
+              ORDER BY stationid`
 
 	slog.Info("Querying text labels...")
 	rows, err := pool.Query(context.TODO(), query, timespan.From, timespan.To)
