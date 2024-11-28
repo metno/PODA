@@ -29,14 +29,13 @@ func writeLabels(path string, labels []*db.KvLabel) error {
 	return nil
 }
 
-func writeSeries[S db.DataSeries | db.TextSeries](series S, path, table string, label *db.KvLabel) error {
+func writeSeries[S db.DataSeries | db.TextSeries](series S, path string, label *db.KvLabel) error {
 	filename := filepath.Join(path, label.ToFilename())
 	file, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
 
-	slog.Info(fmt.Sprintf("Writing %s observations to '%s'", table, filename))
 	if err = gocsv.MarshalFile(series, file); err != nil {
 		slog.Error(err.Error())
 		return err
@@ -111,7 +110,7 @@ func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], poo
 				return
 			}
 
-			if err := writeSeries(series, stationPath, table.Name, label); err != nil {
+			if err := writeSeries(series, stationPath, label); err != nil {
 				slog.Error(err.Error())
 				return
 			}
