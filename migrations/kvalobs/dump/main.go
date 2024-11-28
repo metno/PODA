@@ -39,9 +39,9 @@ type DB struct {
 type Config struct {
 	db.BaseConfig[string]
 	UpdateLabels bool   `help:"Overwrites the label CSV files"`
-	Database     string `arg:"--db" help:"Which database to dump from. Choices: ['kvalobs', 'histkvalobs']"`
-	Table        string `help:"Which table to dump. Choices: ['data', 'text']"`
-	MaxConn      int    `arg:"-n" default:"4" help:"Max number of concurrent connections allowed to KDVH"`
+	Database     string `arg:"--db" help:"Which database to dump from, all by default. Choices: ['kvalobs', 'histkvalobs']"`
+	Table        string `help:"Which table to dump, all by default. Choices: ['data', 'text']"`
+	MaxConn      int    `arg:"-n" default:"4" help:"Max number of concurrent connections allowed to Kvalobs"`
 }
 
 type TimeSpan struct {
