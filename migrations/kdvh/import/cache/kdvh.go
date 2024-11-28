@@ -39,7 +39,7 @@ func cacheKDVH(tables, stations, elements []string, kdvh *db.KDVH) KDVHMap {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := pgx.Connect(ctx, os.Getenv("KDVH_PROXY_CONN"))
+	conn, err := pgx.Connect(ctx, os.Getenv(db.KDVH_ENV_VAR))
 	if err != nil {
 		slog.Error("Could not connect to KDVH proxy. Make sure to be connected to the VPN: " + err.Error())
 		os.Exit(1)

@@ -8,9 +8,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"migrate/kvalobs/db"
+	"migrate/utils"
 )
 
-func getDataLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
+func getDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
 	// TODO: not sure about the sensor/level conditions,
 	// they should never be NULL since they have default values different from NULL?
 	// TODO: We probably don't even need the join,
@@ -42,7 +43,7 @@ func getDataLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error
 	return labels, nil
 }
 
-func getDataSeries(label *db.KvLabel, timespan *TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
+func getDataSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
 	// TODO: is the case useful here, we can just check for cfailed = '' in here
 	// query := `SELECT
 	// 			obstime,

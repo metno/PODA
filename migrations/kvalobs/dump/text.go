@@ -8,9 +8,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"migrate/kvalobs/db"
+	"migrate/utils"
 )
 
-func getTextLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
+func getTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
 	// OGquery := `SELECT DISTINCT
 	//            stationid,
 	//            typeid,
@@ -66,7 +67,7 @@ func getTextLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error
 	return labels, nil
 }
 
-func getTextSeries(label *db.KvLabel, timespan *TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
+func getTextSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
 	// query := `
 	//        SELECT
 	//            obstime,

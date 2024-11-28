@@ -5,7 +5,7 @@ import (
 )
 
 // Kvalobs is composed of two databases
-// 1) `kvalobs` for fresh data
+// 1) `kvalobs` for fresh data?
 // 2) `histkvalobs` for data older than <not sure how long, 2-3 months?>
 //
 // Both contain the same tables:
@@ -85,11 +85,14 @@ import (
 //            - Kvalobs doesn't have the concept of timeseries ID,
 //              instead there is a sequential ID associated with each observation row
 
+const DATA_TABLE_NAME string = "data"
+const TEXT_TABLE_NAME string = "text"
+
 var NULL_VALUES []float64 = []float64{-34767, -34766}
 
 type DataSeries = []*DataObs
 
-// Kvalobs data observation row
+// Kvalobs data table observation row
 type DataObs struct {
 	Obstime     time.Time `db:"obstime"`
 	Original    float64   `db:"original"`
@@ -102,14 +105,20 @@ type DataObs struct {
 
 type TextSeries = []*TextObs
 
-// Kvalobs text observation row
+// Kvalobs text_data table observation row
 type TextObs struct {
 	Obstime  time.Time `db:"obstime"`
 	Original string    `db:"original"`
 	Tbtime   time.Time `db:"tbtime"`
 }
 
-type Kvalobs struct {
+type DB struct {
 	Name       string
 	ConnEnvVar string
+}
+
+func InitDBs() (DB, DB) {
+	kvalobs := DB{Name: "kvalobs", ConnEnvVar: "KVALOBS_CONN_STRING"}
+	histkvalobs := DB{Name: "histkvalobs", ConnEnvVar: "HISTKVALOBS_CONN_STRING"}
+	return kvalobs, histkvalobs
 }

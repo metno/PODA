@@ -124,7 +124,7 @@ func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], poo
 	log.SetOutput(os.Stdout)
 }
 
-func dumpDB(database DB, dataTable Table[db.DataSeries], textTable Table[db.TextSeries], config *Config) {
+func dumpDB(database db.DB, config *Config) {
 	pool, err := pgxpool.New(context.Background(), os.Getenv(database.ConnEnvVar))
 	if err != nil {
 		slog.Error(fmt.Sprint("Could not connect to Kvalobs:", err))
@@ -136,6 +136,18 @@ func dumpDB(database DB, dataTable Table[db.DataSeries], textTable Table[db.Text
 	if err := os.MkdirAll(path, os.ModePerm); err != nil {
 		slog.Error(err.Error())
 		return
+	}
+
+	dataTable := Table[db.DataSeries]{
+		Name:    db.DATA_TABLE_NAME,
+		LabelFn: getDataLabels,
+		ObsFn:   getDataSeries,
+	}
+
+	textTable := Table[db.TextSeries]{
+		Name:    db.TEXT_TABLE_NAME,
+		LabelFn: getTextLabels,
+		ObsFn:   getTextSeries,
 	}
 
 	if config.ChosenTable(dataTable.Name) {

@@ -31,7 +31,7 @@ func CacheMetadata(tables, stations, elements []string, kdvh *db.KDVH) *Cache {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := pgx.Connect(ctx, os.Getenv("STINFO_STRING"))
+	conn, err := pgx.Connect(ctx, os.Getenv(db.STINFO_ENV_VAR))
 	if err != nil {
 		slog.Error("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
 		os.Exit(1)
