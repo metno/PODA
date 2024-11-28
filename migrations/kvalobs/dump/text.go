@@ -10,7 +10,7 @@ import (
 	"migrate/kvalobs/db"
 )
 
-func getTextLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.Label[string], error) {
+func getTextLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
 	// OGquery := `SELECT DISTINCT
 	//            stationid,
 	//            typeid,
@@ -56,8 +56,8 @@ func getTextLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.Label[string],
 	}
 
 	slog.Info("Collecting text labels...")
-	labels := make([]*db.Label[string], 0, rows.CommandTag().RowsAffected())
-	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.Label[string]])
+	labels := make([]*db.KvLabel, 0, rows.CommandTag().RowsAffected())
+	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.KvLabel])
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func getTextLabels(timespan *TimeSpan, pool *pgxpool.Pool) ([]*db.Label[string],
 	return labels, nil
 }
 
-func getTextSeries(label *db.Label[string], timespan *TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
+func getTextSeries(label *db.KvLabel, timespan *TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
 	// query := `
 	//        SELECT
 	//            obstime,

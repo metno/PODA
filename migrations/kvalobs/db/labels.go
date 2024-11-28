@@ -18,6 +18,10 @@ type Label[T int32 | string] struct {
 	Level  *int32
 }
 
+// Can be directly casted to lard.Label
+type LardLabel = Label[int32]
+type KvLabel = Label[string]
+
 func (l *Label[T]) sensorLevelString() (string, string) {
 	var sensor, level string
 	if l.Sensor != nil {
@@ -59,8 +63,8 @@ func parseFilenameFields(s *string) (*int32, error) {
 	return &out, nil
 }
 
-// Deserialize filename to lard.Label
-func LabelFromFilename(filename string) (*Label[int32], error) {
+// Deserialize filename to LardLabel
+func LabelFromFilename(filename string) (*LardLabel, error) {
 	name := strings.TrimSuffix(filename, ".csv")
 
 	fields := strings.Split(name, "_")
@@ -78,7 +82,7 @@ func LabelFromFilename(filename string) (*Label[int32], error) {
 		return nil, err
 	}
 
-	return &Label[int32]{
+	return &LardLabel{
 		StationID: *converted[0],
 		TypeID:    *converted[1],
 		ParamID:   *converted[2],

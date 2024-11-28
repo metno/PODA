@@ -9,7 +9,7 @@ import (
 	"github.com/gocarina/gocsv"
 )
 
-func ReadLabelCSV(filename string) (labels []*Label[string], err error) {
+func ReadLabelCSV(filename string) (labels []*KvLabel, err error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		return nil, err
