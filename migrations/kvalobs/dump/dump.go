@@ -3,6 +3,7 @@ package dump
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -119,6 +120,8 @@ func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], poo
 		}()
 	}
 	wg.Wait()
+
+	log.SetOutput(os.Stdout)
 }
 
 func dumpDB(database DB, dataTable Table[db.DataSeries], textTable Table[db.TextSeries], config *Config) {
