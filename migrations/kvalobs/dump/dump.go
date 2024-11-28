@@ -83,17 +83,17 @@ func dumpTable[S db.DataSeries | db.TextSeries](path string, table Table[S], poo
 	for _, label := range labels {
 		bar.Add(1)
 
+		if !config.ShouldProcessLabel(label) {
+			continue
+		}
+
 		thisPath := filepath.Join(path, fmt.Sprint(label.StationID))
 		if thisPath != stationPath {
 			stationPath = thisPath
 			if err := os.MkdirAll(stationPath, os.ModePerm); err != nil {
 				slog.Error(err.Error())
-				return
+				continue
 			}
-		}
-
-		if !config.ShouldProcessLabel(label) {
-			continue
 		}
 
 		wg.Add(1)
