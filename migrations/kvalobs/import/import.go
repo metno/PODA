@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
-	"migrate/kvalobs/db"
-	"migrate/lard"
-	"migrate/utils"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"migrate/kvalobs/db"
+	"migrate/lard"
+	"migrate/utils"
 )
 
 func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *lard.PermitMaps, pool *pgxpool.Pool, config *Config) (int64, error) {
@@ -21,10 +23,14 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 		slog.Error(err.Error())
 		return 0, err
 	}
-	fmt.Println(stations)
 
 	var rowsInserted int64
 	for _, station := range stations {
+		stnr, err := strconv.ParseInt(station.Name(), 10, 32)
+		if err != nil || !utils.IsEmptyOrContains(config.Stations, int32(stnr)) {
+			continue
+		}
+
 		stationDir := filepath.Join(table.Path, station.Name())
 		labels, err := os.ReadDir(stationDir)
 		if err != nil {
@@ -32,12 +38,10 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 			continue
 		}
 
+		bar := utils.NewBar(len(labels), stationDir)
 		var wg sync.WaitGroup
-
-		var stationRows int64
-
-		bar := utils.NewBar(len(labels), station.Name())
 		for _, file := range labels {
+			// TODO: only add if label was processed?
 			bar.Add(1)
 
 			label, err := db.LabelFromFilename(file.Name())
@@ -64,8 +68,8 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 				defer wg.Done()
 
 				lardLabel := lard.Label(*label)
-				// TODO: figure out if we should (0, 0) sensor level pair to (NULL, NULL)
-				// TODO: figure where to get fromtime, kvalobs directly? Stinfosys?
+				// TODO: figure out if we should convert (0, 0) to (NULL, NULL) for sensor, level
+				// TODO: figure out where to get fromtime, kvalobs directly? Stinfosys?
 				tsid, err := lard.GetTimeseriesID(&lardLabel, time.Now(), pool)
 				if err != nil {
 					slog.Error(err.Error())
@@ -88,12 +92,10 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 					slog.Error(labelStr + "failed flag bulk insertion - " + err.Error())
 				}
 
-				stationRows += count
+				rowsInserted += count
 			}()
 		}
 		wg.Wait()
-		rowsInserted += stationRows
-		slog.Info(fmt.Sprintf("Station %v: %v rows inserted", station.Name(), stationRows))
 	}
 
 	outputStr := fmt.Sprintf("%v: %v total rows inserted", table.Path, rowsInserted)

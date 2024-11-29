@@ -20,10 +20,10 @@ type DataTable = Table[DataSeries]
 type TextTable = Table[TextSeries]
 
 // Function used to query labels from kvalobs given an optional timespan
-type LabelDumpFunc func(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*KvLabel, error)
+type LabelDumpFunc func(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*Label, error)
 
 // Function used to query timeseries from kvalobs for a specific label
-type ObsDumpFunc[S DataSeries | TextSeries] func(label *KvLabel, timespan *utils.TimeSpan, pool *pgxpool.Pool) (S, error)
+type ObsDumpFunc[S DataSeries | TextSeries] func(label *Label, timespan *utils.TimeSpan, pool *pgxpool.Pool) (S, error)
 
 // Lard Import function
 type ImportFunc func(ts [][]any, pool *pgxpool.Pool, logStr string) (int64, error)

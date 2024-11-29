@@ -16,7 +16,7 @@ import (
 // func joinTS(first, second []lard.Label)
 
 type Config struct {
-	db.BaseConfig[string]
+	db.BaseConfig
 	UpdateLabels bool `help:"Overwrites the label CSV files"`
 	MaxConn      int  `arg:"-n" default:"4" help:"Max number of allowed concurrent connections to Kvalobs"`
 }

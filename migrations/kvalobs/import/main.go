@@ -2,7 +2,6 @@ package port
 
 import (
 	"context"
-
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,7 +13,7 @@ import (
 )
 
 type Config struct {
-	db.BaseConfig[int32]
+	db.BaseConfig
 }
 
 func (config *Config) Execute() error {

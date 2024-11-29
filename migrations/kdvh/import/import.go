@@ -33,8 +33,6 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 
 	convFunc := getConvertFunc(table)
 
-	bar := utils.NewBar(len(stations), table.TableName)
-	bar.RenderBlank()
 	for _, station := range stations {
 		stnr, err := getStationNumber(station, config.Stations)
 		if err != nil {
@@ -44,15 +42,17 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 			continue
 		}
 
-		dir := filepath.Join(config.Path, table.Path, station.Name())
-		elements, err := os.ReadDir(dir)
+		stationDir := filepath.Join(config.Path, table.Path, station.Name())
+		elements, err := os.ReadDir(stationDir)
 		if err != nil {
 			slog.Warn(err.Error())
 			continue
 		}
 
+		bar := utils.NewBar(len(elements), stationDir)
 		var wg sync.WaitGroup
 		for _, element := range elements {
+			bar.Add(1)
 			elemCode, err := getElementCode(element, config.Elements)
 			if err != nil {
 				if config.Verbose {
@@ -70,7 +70,7 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 					return
 				}
 
-				filename := filepath.Join(dir, element.Name())
+				filename := filepath.Join(stationDir, element.Name())
 				data, text, flag, err := parseData(filename, tsInfo, convFunc, table, config)
 				if err != nil {
 					return
@@ -98,7 +98,6 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 			}()
 		}
 		wg.Wait()
-		bar.Add(1)
 	}
 
 	outputStr := fmt.Sprintf("%v: %v total rows inserted", table.TableName, rowsInserted)

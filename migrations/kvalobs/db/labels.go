@@ -9,22 +9,16 @@ import (
 )
 
 // Kvalobs specific label
-type Label[T int32 | string] struct {
+type Label struct {
 	StationID int32
 	ParamID   int32
 	TypeID    int32
 	// These two are not present in the `text_data` tabl
-	Sensor *T // bpchar(1) in `data` table
+	Sensor *int32 // bpchar(1) in `data` table
 	Level  *int32
 }
 
-// Can be directly casted to lard.Label
-type LardLabel = Label[int32]
-
-// Kvalobs specific
-type KvLabel = Label[string]
-
-func (l *Label[T]) sensorLevelString() (string, string) {
+func (l *Label) sensorLevelString() (string, string) {
 	var sensor, level string
 	if l.Sensor != nil {
 		sensor = fmt.Sprint(*l.Sensor)
@@ -35,15 +29,15 @@ func (l *Label[T]) sensorLevelString() (string, string) {
 	return sensor, level
 }
 
-func (l *Label[T]) ToFilename() string {
+func (l *Label) ToFilename() string {
 	sensor, level := l.sensorLevelString()
 	return fmt.Sprintf("%v_%v_%v_%v_%v.csv", l.StationID, l.ParamID, l.ParamID, sensor, level)
 }
 
-func (l *Label[T]) LogStr() string {
+func (l *Label) LogStr() string {
 	sensor, level := l.sensorLevelString()
 	return fmt.Sprintf(
-		"(%v - %v - %v - %v - %v): ",
+		"[%v - %v - %v - %v - %v]: ",
 		l.StationID, l.ParamID, l.TypeID, sensor, level,
 	)
 }
@@ -61,7 +55,7 @@ func parseFilenameFields(s *string) (*int32, error) {
 }
 
 // Deserialize filename to LardLabel
-func LabelFromFilename(filename string) (*LardLabel, error) {
+func LabelFromFilename(filename string) (*Label, error) {
 	name := strings.TrimSuffix(filename, ".csv")
 
 	fields := strings.Split(name, "_")
@@ -79,7 +73,7 @@ func LabelFromFilename(filename string) (*LardLabel, error) {
 		return nil, err
 	}
 
-	return &LardLabel{
+	return &Label{
 		StationID: *converted[0],
 		ParamID:   *converted[1],
 		TypeID:    *converted[2],

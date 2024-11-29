@@ -29,7 +29,7 @@ type KvalobsTestCase struct {
 
 func (t *KvalobsTestCase) mockConfig() (*port.Config, *lard.PermitMaps) {
 	return &port.Config{
-			BaseConfig: db.BaseConfig[int32]{
+			BaseConfig: db.BaseConfig{
 				Stations: []int32{t.station},
 			},
 		}, &lard.PermitMaps{
