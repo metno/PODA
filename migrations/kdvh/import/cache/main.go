@@ -1,14 +1,10 @@
 package cache
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"log/slog"
-	"os"
-	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rickb777/period"
 
@@ -17,39 +13,20 @@ import (
 )
 
 type Cache struct {
-	Offsets        OffsetMap
-	Stinfo         StinfoMap
-	KDVH           KDVHMap
-	ParamPermits   ParamPermitMap
-	StationPermits StationPermitMap
+	Offsets OffsetMap
+	Stinfo  StinfoMap
+	KDVH    KDVHMap
+	Permits *lard.PermitMaps
 }
 
 // Caches all the metadata needed for import of KDVH tables.
 // If any error occurs inside here the program will exit.
 func CacheMetadata(tables, stations, elements []string, kdvh *db.KDVH) *Cache {
-	slog.Info("Connecting to Stinfosys to cache metadata")
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	conn, err := pgx.Connect(ctx, os.Getenv(db.STINFO_ENV_VAR))
-	if err != nil {
-		slog.Error("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
-		os.Exit(1)
-	}
-
-	stinfoMeta := cacheStinfoMeta(tables, elements, kdvh, conn)
-	// TODO: use the one in migrate/lard instead!
-	stationPermits := cacheStationPermits(conn)
-	paramPermits := cacheParamPermits(conn)
-
-	conn.Close(context.TODO())
-
 	return &Cache{
-		Stinfo:         stinfoMeta,
-		StationPermits: stationPermits,
-		ParamPermits:   paramPermits,
-		Offsets:        cacheParamOffsets(),
-		KDVH:           cacheKDVH(tables, stations, elements, kdvh),
+		Stinfo:  cacheStinfoMeta(tables, elements, kdvh),
+		Permits: lard.NewPermitTables(),
+		Offsets: cacheParamOffsets(),
+		KDVH:    cacheKDVH(tables, stations, elements, kdvh),
 	}
 }
 
@@ -77,7 +54,7 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 	}
 
 	// Check if data for this station/element is restricted
-	isOpen := cache.timeseriesIsOpen(station, param.TypeID, param.ParamID)
+	isOpen := cache.Permits.TimeseriesIsOpen(station, param.TypeID, param.ParamID)
 
 	// TODO: eventually use this to choose which table to use on insert
 	if !isOpen {
