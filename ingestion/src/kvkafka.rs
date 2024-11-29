@@ -109,7 +109,7 @@ pub struct Kvdata {
     #[serde(default, deserialize_with = "optional")]
     useinfo: Option<String>,
     #[serde(default, deserialize_with = "optional")]
-    cfailed: Option<i32>,
+    cfailed: Option<String>,
 }
 
 // If the field is either empty or missing it should deserialize to None.
