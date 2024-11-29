@@ -3,13 +3,14 @@ package port
 import (
 	"bufio"
 	"log/slog"
-	"migrate/kvalobs/db"
-	"migrate/lard"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"migrate/kvalobs/db"
+	"migrate/lard"
 )
 
 func readDataFiles() []lard.Label {

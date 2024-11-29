@@ -21,7 +21,7 @@ func TextTable(path string) db.TextTable {
 	}
 }
 
-func dumpTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
+func dumpTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, error) {
 	// OGquery := `SELECT DISTINCT
 	//            stationid,
 	//            typeid,
@@ -64,20 +64,22 @@ func dumpTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel
 	slog.Info("Querying text labels...")
 	rows, err := pool.Query(context.TODO(), query, timespan.From, timespan.To)
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
 	slog.Info("Collecting text labels...")
-	labels := make([]*db.KvLabel, 0, rows.CommandTag().RowsAffected())
-	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.KvLabel])
+	labels := make([]*db.Label, 0, rows.CommandTag().RowsAffected())
+	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.Label])
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
 	return labels, nil
 }
 
-func dumpTextSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
+func dumpTextSeries(label *db.Label, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
 	// query := `
 	//        SELECT
 	//            obstime,
@@ -113,11 +115,13 @@ func dumpTextSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.P
 		timespan.To,
 	)
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
 	data, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[db.TextObs])
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 

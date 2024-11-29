@@ -66,7 +66,7 @@ type TsInfo struct {
 }
 
 func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpool.Pool) (*TsInfo, error) {
-	logstr := fmt.Sprintf("%v - %v - %v: ", table, station, element)
+	logstr := fmt.Sprintf("[%v - %v - %v]: ", table, station, element)
 	key := newKDVHKey(element, table, station)
 
 	param, ok := cache.Stinfo[key.Inner]

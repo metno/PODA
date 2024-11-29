@@ -5,45 +5,45 @@ import (
 )
 
 func TestShouldProcessLabel(t *testing.T) {
-	type TestCase[T string] struct {
+	type TestCase struct {
 		tag      string
-		label    Label[T]
-		config   BaseConfig[T]
+		label    Label
+		config   BaseConfig
 		expected bool
 	}
 
-	cases := []TestCase[string]{
+	cases := []TestCase{
 		{
 			tag:      "empty config",
-			label:    Label[string]{StationID: 18700},
-			config:   BaseConfig[string]{},
+			label:    Label{ParamID: 212},
+			config:   BaseConfig{},
 			expected: true,
 		},
 		{
-			tag:      "station specified",
-			label:    Label[string]{StationID: 18700},
-			config:   BaseConfig[string]{Stations: []int32{18700}},
+			tag:      "label paramid in config paramids",
+			label:    Label{ParamID: 212},
+			config:   BaseConfig{ParamIds: []int32{212}},
 			expected: true,
 		},
 		{
-			tag:      "station not in label",
-			label:    Label[string]{StationID: 18700},
-			config:   BaseConfig[string]{Stations: []int32{20000}},
+			tag:      "label paramid NOT in config paramids",
+			label:    Label{ParamID: 212},
+			config:   BaseConfig{ParamIds: []int32{300}},
 			expected: false,
 		},
 		{
-			tag:      "label without level",
-			label:    Label[string]{},
-			config:   BaseConfig[string]{Levels: []int32{2}},
+			tag:      "label level NOT in config level",
+			label:    Label{},
+			config:   BaseConfig{Levels: []int32{2}},
 			expected: false,
 		},
 		{
-			tag: "valid level",
-			label: func() Label[string] {
+			tag: "label level in config levels",
+			label: func() Label {
 				var level int32 = 2
-				return Label[string]{Level: &level}
+				return Label{Level: &level}
 			}(),
-			config:   BaseConfig[string]{Levels: []int32{2}},
+			config:   BaseConfig{Levels: []int32{2}},
 			expected: true,
 		},
 	}

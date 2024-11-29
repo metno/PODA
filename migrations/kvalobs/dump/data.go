@@ -2,6 +2,7 @@ package dump
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"path/filepath"
 
@@ -21,7 +22,7 @@ func DataTable(path string) db.DataTable {
 	}
 }
 
-func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel, error) {
+func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, error) {
 	// TODO: not sure about the sensor/level conditions,
 	// they should never be NULL since they have default values different from NULL?
 	// TODO: We probably don't even need the join,
@@ -40,20 +41,22 @@ func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.KvLabel
 	slog.Info("Querying data labels...")
 	rows, err := pool.Query(context.TODO(), query, timespan.From, timespan.To)
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
 	slog.Info("Collecting data labels...")
-	labels := make([]*db.KvLabel, 0, rows.CommandTag().RowsAffected())
-	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.KvLabel])
+	labels := make([]*db.Label, 0, rows.CommandTag().RowsAffected())
+	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.Label])
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
 	return labels, nil
 }
 
-func dumpDataSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
+func dumpDataSeries(label *db.Label, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
 	// TODO: is the case useful here, we can just check for cfailed = '' in here
 	// query := `SELECT
 	// 			obstime,
@@ -79,6 +82,8 @@ func dumpDataSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.P
 	// 		ORDER BY
 	// 			stationid,
 	// 			obstime`
+
+	// NOTE: sensor and level could be NULL, but in reality they have default values
 	query := `SELECT obstime, original, tbtime, corrected, controlinfo, useinfo, cfailed
                 FROM data
                 WHERE stationid = $1
@@ -90,23 +95,32 @@ func dumpDataSeries(label *db.KvLabel, timespan *utils.TimeSpan, pool *pgxpool.P
                 AND ($7::timestamp IS NULL OR obstime < $7)
                 ORDER BY obstime`
 
+	// Convert to string because `sensor` in Kvalobs is a BPCHAR(1)
+	var sensor *string
+	if label.Sensor != nil {
+		sensorval := fmt.Sprint(*label.Sensor)
+		sensor = &sensorval
+	}
+
 	rows, err := pool.Query(
 		context.TODO(),
 		query,
 		label.StationID,
 		label.TypeID,
 		label.ParamID,
-		label.Sensor,
+		sensor,
 		label.Level,
 		timespan.From,
 		timespan.To,
 	)
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
 	data, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[db.DataObs])
 	if err != nil {
+		slog.Error(err.Error())
 		return nil, err
 	}
 
