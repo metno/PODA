@@ -12,6 +12,7 @@ import (
 	"migrate/kdvh/db"
 	port "migrate/kdvh/import"
 	"migrate/kdvh/import/cache"
+	"migrate/lard"
 )
 
 type KdvhTestCase struct {
@@ -38,8 +39,10 @@ func (t *KdvhTestCase) mockConfig() (*port.Config, *cache.Cache) {
 					IsScalar: true,
 				},
 			},
-			StationPermits: cache.StationPermitMap{
-				t.station: t.permit,
+			Permits: &lard.PermitMaps{
+				StationPermits: lard.StationPermitMap{
+					t.station: t.permit,
+				},
 			},
 		}
 }

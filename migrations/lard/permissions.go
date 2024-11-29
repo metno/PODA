@@ -29,7 +29,7 @@ type PermitMaps struct {
 }
 
 func NewPermitTables() *PermitMaps {
-	slog.Info("Connecting to Stinfosys to cache metadata")
+	slog.Info("Connecting to Stinfosys to cache permits")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
@@ -38,6 +38,7 @@ func NewPermitTables() *PermitMaps {
 		slog.Error("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
 		os.Exit(1)
 	}
+	defer conn.Close(ctx)
 
 	return &PermitMaps{
 		ParamPermits:   cacheParamPermits(conn),

@@ -32,8 +32,19 @@ type StinfoParam struct {
 }
 
 // Save metadata for later use by quering Stinfosys
-func cacheStinfoMeta(tables, elements []string, kdvh *db.KDVH, conn *pgx.Conn) StinfoMap {
+func cacheStinfoMeta(tables, elements []string, kdvh *db.KDVH) StinfoMap {
 	cache := make(StinfoMap)
+
+	slog.Info("Connecting to Stinfosys to cache metadata")
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	conn, err := pgx.Connect(ctx, os.Getenv(db.STINFO_ENV_VAR))
+	if err != nil {
+		slog.Error("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
+		os.Exit(1)
+	}
+	defer conn.Close(ctx)
 
 	for _, table := range kdvh.Tables {
 		if len(tables) > 0 && !slices.Contains(tables, table.TableName) {
