@@ -38,6 +38,7 @@ func CacheMetadata(tables, stations, elements []string, kdvh *db.KDVH) *Cache {
 	}
 
 	stinfoMeta := cacheStinfoMeta(tables, elements, kdvh, conn)
+	// TODO: use the one in migrate/lard instead!
 	stationPermits := cacheStationPermits(conn)
 	paramPermits := cacheParamPermits(conn)
 
@@ -98,7 +99,7 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 		Level:     param.Hlevel,
 	}
 
-	tsid, err := lard.GetTimeseriesID(&label, &param.Fromtime, pool)
+	tsid, err := lard.GetTimeseriesID(&label, param.Fromtime, pool)
 	if err != nil {
 		slog.Error(logstr + "could not obtain timeseries - " + err.Error())
 		return nil, err

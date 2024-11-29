@@ -7,8 +7,9 @@ import (
 	"migrate/lard"
 	"os"
 	"path/filepath"
-
-	"github.com/gocarina/gocsv"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // Returns a TextTable for import
@@ -30,20 +31,28 @@ func ReadTextCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 
 	reader := bufio.NewScanner(file)
 
-	// TODO: maybe I should preallocate slice size if I can?
-	var data [][]any
-	for reader.Scan() {
-		var kvObs db.TextObs
+	// Parse number of rows
+	reader.Scan()
+	rowCount, _ := strconv.Atoi(reader.Text())
 
-		err = gocsv.UnmarshalString(reader.Text(), &kvObs)
+	// Skip header
+	reader.Scan()
+
+	// Parse observations
+	data := make([][]any, 0, rowCount)
+	for reader.Scan() {
+		// obstime, original, tbtime
+		fields := strings.Split(reader.Text(), ",")
+
+		obstime, err := time.Parse(time.RFC3339, fields[0])
 		if err != nil {
 			return nil, nil, err
 		}
 
 		lardObs := lard.TextObs{
 			Id:      tsid,
-			Obstime: kvObs.Obstime,
-			Text:    &kvObs.Original,
+			Obstime: obstime,
+			Text:    &fields[1],
 		}
 
 		data = append(data, lardObs.ToRow())

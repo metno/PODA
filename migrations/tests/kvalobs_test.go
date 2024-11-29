@@ -61,8 +61,7 @@ func TestImportDataKvalobs(t *testing.T) {
 	_, histkvalobs := db.InitDBs()
 
 	cases := []KvalobsDataCase{
-		DataCase(KvalobsTestCase{db: histkvalobs, station: 18700, permit: 1, expectedRows: 100}),
-		// DataCase(KvalobsTestCase{db: histkvalobs, station: 18700, permit: 0, expectedRows: 100}),
+		DataCase(KvalobsTestCase{db: histkvalobs, station: 18700, paramid: 313, permit: 1, expectedRows: 39}),
 	}
 
 	for _, c := range cases {
@@ -73,47 +72,47 @@ func TestImportDataKvalobs(t *testing.T) {
 		case err != nil:
 			t.Fatal(err)
 		case insertedRows != c.expectedRows:
-			t.Log(insertedRows)
-			// t.Fail()
+			// t.Log(insertedRows)
+			t.Fail()
 		}
 	}
 }
 
-// type KvalobsTextCase struct {
-// 	KvalobsTestCase
-// 	table db.TextTable
-// }
-//
-// func TextCase(ktc KvalobsTestCase) KvalobsTextCase {
-// 	path := filepath.Join(DUMPS_PATH, ktc.db.Name)
-// 	return KvalobsTextCase{ktc, port.TextTable(path)}
-// }
-//
-// func TestImportTextKvalobs(t *testing.T) {
-// 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-//
-// 	pool, err := pgxpool.New(context.TODO(), LARD_STRING)
-// 	if err != nil {
-// 		t.Log("Could not connect to Lard:", err)
-// 	}
-// 	defer pool.Close()
-//
-// 	kvalobs, histkvalobs := db.InitDBs()
-//
-// 	cases := []KvalobsTextCase{
-// 		TextCase(KvalobsTestCase{db: kvalobs, station: 18700, paramid: 212, permit: 0, expectedRows: 100}),
-// 		TextCase(KvalobsTestCase{db: histkvalobs, station: 18700, paramid: 212, permit: 0, expectedRows: 100}),
-// 	}
-//
-// 	for _, c := range cases {
-// 		config, permits := c.mockConfig()
-// 		insertedRows, err := port.ImportTable(c.table, permits, pool, config)
-//
-// 		switch {
-// 		case err != nil:
-// 			t.Fatal(err)
-// 		case insertedRows != c.expectedRows:
-// 			t.Fail()
-// 		}
-// 	}
-// }
+type KvalobsTextCase struct {
+	KvalobsTestCase
+	table db.TextTable
+}
+
+func TextCase(ktc KvalobsTestCase) KvalobsTextCase {
+	path := filepath.Join(DUMPS_PATH, ktc.db.Name)
+	return KvalobsTextCase{ktc, port.TextTable(path)}
+}
+
+func TestImportTextKvalobs(t *testing.T) {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	pool, err := pgxpool.New(context.TODO(), LARD_STRING)
+	if err != nil {
+		t.Log("Could not connect to Lard:", err)
+	}
+	defer pool.Close()
+
+	_, histkvalobs := db.InitDBs()
+
+	cases := []KvalobsTextCase{
+		// TextCase(KvalobsTestCase{db: kvalobs, station: 18700, paramid: 212, permit: 1, expectedRows: 100}),
+		TextCase(KvalobsTestCase{db: histkvalobs, station: 18700, permit: 1, expectedRows: 182}),
+	}
+
+	for _, c := range cases {
+		config, permits := c.mockConfig()
+		insertedRows, err := port.ImportTable(c.table, permits, pool, config)
+
+		switch {
+		case err != nil:
+			t.Fatal(err)
+		case insertedRows != c.expectedRows:
+			t.Fail()
+		}
+	}
+}

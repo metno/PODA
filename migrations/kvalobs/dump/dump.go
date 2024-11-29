@@ -23,8 +23,7 @@ func readLabelCSV(filename string) (labels []*db.KvLabel, err error) {
 	}
 	defer file.Close()
 
-	// TODO: maybe I should preallocate slice size if I can?
-	err = gocsv.UnmarshalFile(file, &labels)
+	err = gocsv.Unmarshal(file, &labels)
 	return labels, err
 }
 
@@ -35,6 +34,8 @@ func writeLabelCSV(path string, labels []*db.KvLabel) error {
 	}
 
 	slog.Info("Writing timeseries labels to " + path)
+	// Write number of lines as header
+	// file.Write([]byte(fmt.Sprintf("%v\n", len(labels))))
 	if err = gocsv.Marshal(labels, file); err != nil {
 		return err
 	}
@@ -42,7 +43,6 @@ func writeLabelCSV(path string, labels []*db.KvLabel) error {
 	return nil
 }
 
-// TODO: add number of rows as header row
 func writeSeriesCSV[S db.DataSeries | db.TextSeries](series S, path string, label *db.KvLabel) error {
 	filename := filepath.Join(path, label.ToFilename())
 	file, err := os.Create(filename)
@@ -50,7 +50,9 @@ func writeSeriesCSV[S db.DataSeries | db.TextSeries](series S, path string, labe
 		return err
 	}
 
-	if err = gocsv.MarshalFile(series, file); err != nil {
+	// Write number of lines on first line, keep headers on 2nd line
+	file.Write([]byte(fmt.Sprintf("%v\n", len(series))))
+	if err = gocsv.Marshal(series, file); err != nil {
 		slog.Error(err.Error())
 		return err
 	}
@@ -131,7 +133,7 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 				return
 			}
 
-			slog.Info(label.ToString() + ": dumped successfully")
+			slog.Info(label.LogStr() + "dumped successfully")
 		}()
 	}
 	wg.Wait()

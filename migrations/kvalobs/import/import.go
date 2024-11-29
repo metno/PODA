@@ -34,6 +34,8 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 
 		var wg sync.WaitGroup
 
+		var stationRows int64
+
 		bar := utils.NewBar(len(labels), station.Name())
 		for _, file := range labels {
 			bar.Add(1)
@@ -48,12 +50,12 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 				continue
 			}
 
-			labelStr := label.ToString()
+			labelStr := label.LogStr()
 
 			// Check if data for this station/element is restricted
 			if !permits.TimeseriesIsOpen(label.StationID, label.TypeID, label.ParamID) {
 				// TODO: eventually use this to choose which table to use on insert
-				slog.Warn(labelStr + "Timeseries data is restricted")
+				slog.Warn(labelStr + "timeseries data is restricted, skipping")
 				continue
 			}
 
@@ -61,9 +63,9 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 			go func() {
 				defer wg.Done()
 
-				// FIXME: FromTime can be nil and anyway config.FromTime is wrong here!
 				lardLabel := lard.Label(*label)
-				// tsid, err := lard.GetTimeseriesID(&lardLabel, config.FromTime.Inner(), pool)
+				// TODO: figure out if we should (0, 0) sensor level pair to (NULL, NULL)
+				// TODO: figure where to get fromtime, kvalobs directly? Stinfosys?
 				tsid, err := lard.GetTimeseriesID(&lardLabel, time.Now(), pool)
 				if err != nil {
 					slog.Error(err.Error())
@@ -86,10 +88,12 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 					slog.Error(labelStr + "failed flag bulk insertion - " + err.Error())
 				}
 
-				rowsInserted += count
+				stationRows += count
 			}()
 		}
 		wg.Wait()
+		rowsInserted += stationRows
+		slog.Info(fmt.Sprintf("Station %v: %v rows inserted", station.Name(), stationRows))
 	}
 
 	outputStr := fmt.Sprintf("%v: %v total rows inserted", table.Path, rowsInserted)

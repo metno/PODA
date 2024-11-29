@@ -86,7 +86,7 @@ import (
 //              instead there is a sequential ID associated with each observation row
 
 const DATA_TABLE_NAME string = "data"
-const TEXT_TABLE_NAME string = "text"
+const TEXT_TABLE_NAME string = "text" // text_data
 
 var NULL_VALUES []float64 = []float64{-34767, -34766}
 
