@@ -10,8 +10,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/gocarina/gocsv"
 )
 
 func readDataFiles() []lard.Label {
@@ -38,24 +36,28 @@ func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 
 	reader := bufio.NewScanner(file)
 
-	// TODO: maybe I should preallocate slice size if I can?
-	// Parse header
-	// reader.Scan()
-	// rowCount, _ = strconv.Atoi(scanner.Text())
-	// data := make([][]any, 0, rowCount)
-	// flags := make([][]any, 0, rowCount)
-	var data [][]any
-	var flags [][]any
+	// Parse number of rows
+	reader.Scan()
+	rowCount, _ := strconv.Atoi(reader.Text())
 
+	// Skip header
+	reader.Scan()
+
+	// Parse observations
+	data := make([][]any, 0, rowCount)
+	flags := make([][]any, 0, rowCount)
 	for reader.Scan() {
-		// obstime, original, tbtime, corrected, Controlinfo, Useinfo, Cfailed
+		// obstime, original, tbtime, corrected, controlinfo, useinfo, cfailed
+		// We don't parse tbtime
 		fields := strings.Split(reader.Text(), ",")
 
-		obstime, err := time.Parse(time.RFC3339Nano, fields[0])
+		obstime, err := time.Parse(time.RFC3339, fields[0])
 		if err != nil {
 			return nil, nil, err
 		}
 
+		// TODO: probably should insert corrected to data table
+		// and keep original in flags table?
 		obsvalue64, err := strconv.ParseFloat(fields[1], 32)
 		if err != nil {
 			return nil, nil, err

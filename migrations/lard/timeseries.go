@@ -10,8 +10,8 @@ import (
 // Struct that mimics `labels.met` table structure
 type Label struct {
 	StationID int32
-	TypeID    int32
 	ParamID   int32
+	TypeID    int32
 	Sensor    *int32
 	Level     *int32
 }
