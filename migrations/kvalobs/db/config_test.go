@@ -49,9 +49,9 @@ func TestShouldProcessLabel(t *testing.T) {
 	}
 
 	for _, c := range cases {
+		t.Log(c.tag)
 		res := c.config.ShouldProcessLabel(&c.label)
 		if res != c.expected {
-			t.Log(c.tag)
 			t.Fail()
 		}
 	}
