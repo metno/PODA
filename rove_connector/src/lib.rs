@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use bb8_postgres::PostgresConnectionManager;
-use chrono::{TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use chronoutil::RelativeDuration;
 use rove::data_switch::{self, DataCache, DataConnector, SpaceSpec, TimeSpec, Timeseries};
 use thiserror::Error;
@@ -20,47 +20,49 @@ pub struct Connector {
     pool: PgConnectionPool,
 }
 
-#[async_trait]
-impl DataConnector for Connector {
-    async fn fetch_data(
+fn extract_time_spec(
+    time_spec: &TimeSpec,
+    num_leading_points: u8,
+    num_trailing_points: u8,
+) -> Result<(DateTime<Utc>, DateTime<Utc>, &str), data_switch::Error> {
+    // TODO: matching intervals like this is a hack, but currently necessary to avoid
+    // SQL injection. Ideally we could pass an interval type as a query param, which would
+    // also save us the query_string allocation, but no ToSql implementations for intervals
+    // currently exist in tokio_postgres, so we need to implement it ourselves.
+    let interval = match time_spec.time_resolution {
+        x if x == RelativeDuration::minutes(1) => "1 minute",
+        x if x == RelativeDuration::hours(1) => "1 hour",
+        x if x == RelativeDuration::days(1) => "1 day",
+        _ => {
+            return Err(data_switch::Error::Other(Box::new(
+                Error::UnhandledTimeResolution(time_spec.time_resolution),
+            )))
+        }
+    };
+
+    // TODO: should time_spec just use chrono timestamps instead of unix?
+    // IIRC the reason for unix timestamps was easy compatibility with protobuf, but that's
+    // less of a priority now
+    let start_time = Utc.timestamp_opt(time_spec.timerange.start.0, 0).unwrap()
+        - (time_spec.time_resolution * num_leading_points.into());
+    // TODO: figure out whether the range in postgres is inclusive on the range here or
+    // we need to add 1 second
+    let end_time = Utc.timestamp_opt(time_spec.timerange.start.0, 0).unwrap()
+        + (time_spec.time_resolution * num_trailing_points.into());
+
+    Ok((start_time, end_time, interval))
+}
+
+impl Connector {
+    async fn fetch_one(
         &self,
-        space_spec: &SpaceSpec,
+        ts_id: i32,
         time_spec: &TimeSpec,
         num_leading_points: u8,
         num_trailing_points: u8,
-        _extra_spec: Option<&str>,
     ) -> Result<DataCache, data_switch::Error> {
-        // TODO: matching intervals like this is a hack, but currently necessary to avoid
-        // SQL injection. Ideally we could pass an interval type as a query param, which would
-        // also save us the query_string allocation, but no ToSql implementations for intervals
-        // currently exist in tokio_postgres, so we need to implement it ourselves.
-        let interval = match time_spec.time_resolution {
-            x if x == RelativeDuration::minutes(1) => "1 minute",
-            x if x == RelativeDuration::hours(1) => "1 hour",
-            x if x == RelativeDuration::days(1) => "1 day",
-            _ => {
-                return Err(data_switch::Error::Other(Box::new(
-                    Error::UnhandledTimeResolution(time_spec.time_resolution),
-                )))
-            }
-        };
-
-        let ts_id = match space_spec {
-            SpaceSpec::One(ts_id) => ts_id,
-            // TODO: We should handle at least the All case, Polygon can be left unimplemented for
-            // now
-            _ => todo!(),
-        };
-
-        // TODO: should time_spec just use chrono timestamps instead of unix?
-        // IIRC the reason for unix timestamps was easy compatibility with protobuf, but that's
-        // less of a priority now
-        let start_time = Utc.timestamp_opt(time_spec.timerange.start.0, 0).unwrap()
-            - (time_spec.time_resolution * num_leading_points.into());
-        // TODO: figure out whether the range in postgres is inclusive on the range here or
-        // we need to add 1 second
-        let end_time = Utc.timestamp_opt(time_spec.timerange.start.0, 0).unwrap()
-            + (time_spec.time_resolution * num_trailing_points.into());
+        let (start_time, end_time, interval) =
+            extract_time_spec(time_spec, num_leading_points, num_trailing_points)?;
 
         let query_string = format!("SELECT data.obsvalue, ts_rule.timestamp \
                 FROM (SELECT data.obsvalue, data.obstime FROM data WHERE data.timeseries = $1) as data 
@@ -103,5 +105,33 @@ impl DataConnector for Connector {
         };
 
         Ok(cache)
+    }
+}
+
+#[async_trait]
+impl DataConnector for Connector {
+    async fn fetch_data(
+        &self,
+        space_spec: &SpaceSpec,
+        time_spec: &TimeSpec,
+        num_leading_points: u8,
+        num_trailing_points: u8,
+        _extra_spec: Option<&str>,
+    ) -> Result<DataCache, data_switch::Error> {
+        match space_spec {
+            SpaceSpec::One(ts_id) => {
+                self.fetch_one(
+                    // TODO: deal with this unwrap
+                    ts_id.parse().unwrap(),
+                    time_spec,
+                    num_leading_points,
+                    num_trailing_points,
+                )
+                .await
+            }
+            // TODO: We should handle at least the All case, Polygon can be left unimplemented for
+            // now
+            _ => todo!(),
+        }
     }
 }
