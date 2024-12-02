@@ -3,7 +3,6 @@ package cache
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"log/slog"
 	"os"
 	"time"
@@ -36,8 +35,10 @@ func (c *Cache) GetSeriesTimespan(label *db.Label) (utils.TimeSpan, error) {
 		return timespan, nil
 	}
 
-	// If there is no timespan we can't insert a new timeseries
-	return utils.TimeSpan{}, errors.New(label.LogStr() + "No timespan found, cannot create timeseries")
+	// If there is no timespan we insert null fromtime and totime
+	// TODO: is this really what we want to do?
+	// Is there another place where to find this information?
+	return utils.TimeSpan{}, nil
 }
 
 func (c *Cache) TimeseriesIsOpen(stnr, typeid, paramid int32) bool {

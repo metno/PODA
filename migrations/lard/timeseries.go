@@ -2,7 +2,6 @@ package lard
 
 import (
 	"context"
-	"errors"
 	"migrate/utils"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -60,10 +59,6 @@ func GetTimeseriesID(label *Label, timespan utils.TimeSpan, pool *pgxpool.Pool) 
 		if err == nil {
 			return tsid, nil
 		}
-	}
-
-	if timespan.From == nil {
-		return tsid, errors.New("Fromtime should never be null when creating new timeseries")
 	}
 
 	// If none of the above worked insert a new timeseries
