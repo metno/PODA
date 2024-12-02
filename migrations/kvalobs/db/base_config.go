@@ -24,7 +24,6 @@ type BaseConfig struct {
 }
 
 func (config *BaseConfig) ShouldProcessLabel(label *Label) bool {
-	// (config.Ts == nil || slices.Contains(config.Ts, ts.ID)) ||
 	return utils.IsEmptyOrContains(config.ParamIds, label.ParamID) &&
 		// utils.IsEmptyOrContains(config.Stations, label.StationID) &&
 		utils.IsEmptyOrContains(config.TypeIds, label.TypeID) &&
