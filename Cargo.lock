@@ -2372,6 +2372,7 @@ dependencies = [
  "bb8-postgres",
  "chrono",
  "chronoutil",
+ "postgres-types",
  "rove",
  "thiserror",
  "tokio-postgres",
