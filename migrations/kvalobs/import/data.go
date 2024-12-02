@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -39,6 +40,8 @@ func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 	// Skip header
 	reader.Scan()
 
+	var originalPtr, correctedPtr *float32
+
 	// Parse observations
 	data := make([][]any, 0, rowCount)
 	flags := make([][]any, 0, rowCount)
@@ -52,8 +55,6 @@ func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 			return nil, nil, err
 		}
 
-		// TODO: probably should insert corrected to data table
-		// and keep original in flags table?
 		obsvalue64, err := strconv.ParseFloat(fields[1], 32)
 		if err != nil {
 			return nil, nil, err
@@ -64,26 +65,36 @@ func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 			return nil, nil, err
 		}
 
-		obsvalue := float32(obsvalue64)
-		corrected := float32(corrected64)
+		// Filter out special values that in Kvalobs stand for null observations
+		original := float32(obsvalue64)
+		if !slices.Contains(db.NULL_VALUES, original) {
+			originalPtr = &original
+		}
 
+		corrected := float32(corrected64)
+		if !slices.Contains(db.NULL_VALUES, corrected) {
+			correctedPtr = &corrected
+		}
+
+		// Corrected value is inserted in main data table
 		lardObs := lard.DataObs{
 			Id:      tsid,
 			Obstime: obstime,
-			Data:    &obsvalue,
+			Data:    correctedPtr,
 		}
 
-		var cfailed *string = nil
+		var cfailed *string
 		if fields[6] != "" {
 			cfailed = &fields[6]
 		}
 
+		// Original value is saved in flag table
 		flag := lard.Flag{
 			Id:          tsid,
 			Obstime:     obstime,
-			Corrected:   &corrected,
-			Controlinfo: &fields[4],
-			Useinfo:     &fields[5],
+			Original:    originalPtr,
+			Controlinfo: &fields[4], // Never null
+			Useinfo:     &fields[5], // Never null
 			Cfailed:     cfailed,
 		}
 
