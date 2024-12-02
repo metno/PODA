@@ -22,14 +22,12 @@ func main() {
 
 	// The following env variables are required:
 	// 1. Dump
-	//   - kdvh: "KDVH_CONN_STRING"
+	//   - kdvh: "KDVH_PROXY_CONN_STRING"
 	//   - kvalobs: "KVALOBS_CONN_STRING", "HISTKVALOBS_CONN_STRING"
 	//
 	// 2. Import
-	//   - kdvh: "LARD_CONN_STRING", "STINFO_CONN_STRING", "KDVH_CONN_STRING"
+	//   - kdvh: "LARD_CONN_STRING", "STINFO_CONN_STRING", "KDVH_PROXY_CONN_STRING"
 	//   - kvalobs: "LARD_CONN_STRING", "STINFO_CONN_STRING", "KVALOBS_CONN_STRING"
-	//
-	// NOTE: KDVH_CONN_STRING refers to the proxy
 	err := godotenv.Load()
 	if err != nil {
 		fmt.Println(err)
