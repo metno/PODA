@@ -54,7 +54,7 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 			return
 		}
 
-		bar := utils.NewBar(len(elements), fmt.Sprint("    "+station))
+		bar := utils.NewBar(len(elements), fmt.Sprintf("%10s", station))
 		bar.RenderBlank()
 
 		var wg sync.WaitGroup
@@ -65,8 +65,8 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 			semaphore <- struct{}{}
 			go func() {
 				defer func() {
-					wg.Done()
 					bar.Add(1)
+					wg.Done()
 				}()
 
 				err := dumpFunc(

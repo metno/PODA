@@ -127,7 +127,7 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 
 		// TODO: this bar is a bit deceiving if you don't dump all the labels
 		// Maybe should only cache the ones requested from cli?
-		bar := utils.NewBar(len(labels), fmt.Sprintf("    %v", station))
+		bar := utils.NewBar(len(labels), fmt.Sprintf("%10d", station))
 		bar.RenderBlank()
 
 		for _, label := range labels {
@@ -136,8 +136,8 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 
 			go func() {
 				defer func() {
-					wg.Done()
 					bar.Add(1)
+					wg.Done()
 					// Release semaphore
 					<-semaphore
 				}()

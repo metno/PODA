@@ -56,7 +56,7 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 			continue
 		}
 
-		bar := utils.NewBar(len(elements), fmt.Sprint("    "+station.Name()))
+		bar := utils.NewBar(len(elements), fmt.Sprintf("%10s", station.Name()))
 		bar.RenderBlank()
 
 		var wg sync.WaitGroup
@@ -64,8 +64,8 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 			wg.Add(1)
 			go func() {
 				defer func() {
-					wg.Done()
 					bar.Add(1)
+					wg.Done()
 				}()
 
 				elemCode, err := getElementCode(element, config.Elements)
