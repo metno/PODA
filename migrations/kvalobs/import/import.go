@@ -120,14 +120,14 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cach
 func ImportDB(database db.DB, cache *cache.Cache, pool *pgxpool.Pool, config *Config) {
 	path := filepath.Join(config.Path, database.Name)
 
-	if config.ChosenTable(db.DATA_TABLE_NAME) {
+	if utils.IsEmptyOrEqual(config.Table, db.DATA_TABLE_NAME) {
 		table := DataTable(path)
 		utils.SetLogFile(table.Path, "import")
 
 		ImportTable(table, cache, pool, config)
 	}
 
-	if config.ChosenTable(db.TEXT_TABLE_NAME) {
+	if utils.IsEmptyOrEqual(config.Table, db.TEXT_TABLE_NAME) {
 		table := TextTable(path)
 		utils.SetLogFile(table.Path, "import")
 

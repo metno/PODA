@@ -36,13 +36,3 @@ func (config *BaseConfig) ShouldProcessLabel(label *Label) bool {
 func (config *BaseConfig) TimeSpan() *utils.TimeSpan {
 	return &utils.TimeSpan{From: config.FromTime.Inner(), To: config.ToTime.Inner()}
 }
-
-// Check if the `--db` flag was passed in
-func (config *BaseConfig) ChosenDB(name string) bool {
-	return config.Database == "" || config.Database == name
-}
-
-// Check if the `--table` flag was passed in
-func (config *BaseConfig) ChosenTable(name string) bool {
-	return config.Table == "" || config.Table == name
-}

@@ -2,6 +2,7 @@ package dump
 
 import (
 	"migrate/kvalobs/db"
+	"migrate/utils"
 )
 
 // Same timeseries could be in both 'data' and 'text_data' tables
@@ -24,11 +25,11 @@ type Config struct {
 func (config *Config) Execute() {
 	kvalobs, histkvalobs := db.InitDBs()
 
-	if config.ChosenDB(kvalobs.Name) {
+	if utils.IsEmptyOrEqual(config.Database, kvalobs.Name) {
 		dumpDB(kvalobs, config)
 	}
 
-	if config.ChosenDB(histkvalobs.Name) {
+	if utils.IsEmptyOrEqual(config.Database, histkvalobs.Name) {
 		dumpDB(histkvalobs, config)
 	}
 }
