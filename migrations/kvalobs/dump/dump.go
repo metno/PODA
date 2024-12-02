@@ -120,21 +120,20 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 		bar := utils.NewBar(len(labels), stationPath)
 
 		for _, label := range labels {
-			// TODO: only add to the bar if the label is processed?
-			bar.Add(1)
-
-			if !config.ShouldProcessLabel(label) {
-				continue
-			}
-
 			wg.Add(1)
 			semaphore <- struct{}{}
+
 			go func() {
 				defer func() {
 					wg.Done()
+					bar.Add(1)
 					// Release semaphore
 					<-semaphore
 				}()
+
+				if !config.ShouldProcessLabel(label) {
+					return
+				}
 
 				series, err := table.DumpSeries(label, timespan, pool)
 				if err != nil {
