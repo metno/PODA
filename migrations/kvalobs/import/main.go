@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"migrate/kvalobs/db"
+	"migrate/kvalobs/import/cache"
 	"migrate/lard"
 )
 
@@ -17,7 +18,8 @@ type Config struct {
 }
 
 func (config *Config) Execute() error {
-	permits := lard.NewPermitTables()
+	kvalobs, histkvalobs := db.InitDBs()
+	cache := cache.New(kvalobs)
 
 	pool, err := pgxpool.New(context.Background(), os.Getenv(lard.LARD_ENV_VAR))
 	if err != nil {
@@ -25,14 +27,12 @@ func (config *Config) Execute() error {
 	}
 	defer pool.Close()
 
-	kvalobs, histkvalobs := db.InitDBs()
-
 	if config.ChosenDB(kvalobs.Name) {
-		ImportDB(kvalobs, permits, pool, config)
+		ImportDB(kvalobs, cache, pool, config)
 	}
 
 	if config.ChosenDB(histkvalobs.Name) {
-		ImportDB(histkvalobs, permits, pool, config)
+		ImportDB(histkvalobs, cache, pool, config)
 	}
 
 	return nil

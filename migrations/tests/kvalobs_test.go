@@ -1,16 +1,19 @@
-package main
+package tests
 
 import (
 	"context"
 	"log"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"migrate/kvalobs/db"
 	port "migrate/kvalobs/import"
+	"migrate/kvalobs/import/cache"
 	"migrate/lard"
+	"migrate/utils"
 )
 
 const LARD_STRING string = "host=localhost user=postgres dbname=postgres password=postgres"
@@ -27,14 +30,21 @@ type KvalobsTestCase struct {
 	expectedRows int64
 }
 
-func (t *KvalobsTestCase) mockConfig() (*port.Config, *lard.PermitMaps) {
+func (t *KvalobsTestCase) mockConfig() (*port.Config, *cache.Cache) {
+	fromtime, _ := time.Parse(time.DateOnly, "1900-01-01")
 	return &port.Config{
 			BaseConfig: db.BaseConfig{
 				Stations: []int32{t.station},
 			},
-		}, &lard.PermitMaps{
-			StationPermits: lard.StationPermitMap{
-				t.station: t.permit,
+		},
+		&cache.Cache{
+			Meta: map[cache.MetaKey]utils.TimeSpan{
+				{Stationid: t.station}: {From: &fromtime},
+			},
+			Permits: lard.PermitMaps{
+				StationPermits: lard.StationPermitMap{
+					t.station: t.permit,
+				},
 			},
 		}
 }
@@ -65,14 +75,13 @@ func TestImportDataKvalobs(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		config, permits := c.mockConfig()
-		insertedRows, err := port.ImportTable(c.table, permits, pool, config)
+		config, cache := c.mockConfig()
+		insertedRows, err := port.ImportTable(c.table, cache, pool, config)
 
 		switch {
 		case err != nil:
 			t.Fatal(err)
 		case insertedRows != c.expectedRows:
-			// t.Log(insertedRows)
 			t.Fail()
 		}
 	}
@@ -97,16 +106,15 @@ func TestImportTextKvalobs(t *testing.T) {
 	}
 	defer pool.Close()
 
-	_, histkvalobs := db.InitDBs()
+	kvalobs, _ := db.InitDBs()
 
 	cases := []KvalobsTextCase{
-		// TextCase(KvalobsTestCase{db: kvalobs, station: 18700, paramid: 212, permit: 1, expectedRows: 100}),
-		TextCase(KvalobsTestCase{db: histkvalobs, station: 18700, permit: 1, expectedRows: 182}),
+		TextCase(KvalobsTestCase{db: kvalobs, station: 18700, permit: 1, expectedRows: 182}),
 	}
 
 	for _, c := range cases {
-		config, permits := c.mockConfig()
-		insertedRows, err := port.ImportTable(c.table, permits, pool, config)
+		config, cache := c.mockConfig()
+		insertedRows, err := port.ImportTable(c.table, cache, pool, config)
 
 		switch {
 		case err != nil:

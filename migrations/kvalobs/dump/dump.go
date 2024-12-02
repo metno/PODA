@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/gocarina/gocsv"
@@ -65,7 +66,7 @@ func writeSeriesCSV[S db.DataSeries | db.TextSeries](series S, path string, labe
 	return nil
 }
 
-func getLabels[T db.DataSeries | db.TextSeries](table db.Table[T], pool *pgxpool.Pool, config *Config) (labels []*db.Label, err error) {
+func getLabels[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool.Pool, config *Config) (labels []*db.Label, err error) {
 	labelFile := table.Path + "_labels.csv"
 
 	if _, err := os.Stat(labelFile); err != nil || config.UpdateLabels {
@@ -93,6 +94,9 @@ func getStationLabelMap(labels []*db.Label) map[int32][]*db.Label {
 }
 
 func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool.Pool, config *Config) {
+	fmt.Println("Importing from " + table.Path)
+	defer fmt.Println(strings.Repeat("- ", 50))
+
 	labels, err := getLabels(table, pool, config)
 	if err != nil {
 		return
@@ -117,7 +121,7 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 
 		// TODO: this bar is a bit deceiving if you don't dump all the labels
 		// Maybe should only cache the ones requested from cli?
-		bar := utils.NewBar(len(labels), stationPath)
+		bar := utils.NewBar(len(labels), fmt.Sprint(station))
 
 		for _, label := range labels {
 			wg.Add(1)
@@ -167,14 +171,11 @@ func dumpDB(database db.DB, config *Config) {
 
 	if config.ChosenTable(db.DATA_TABLE_NAME) {
 		table := DataTable(path)
-
 		dumpTable(table, pool, config)
 	}
 
 	if config.ChosenTable(db.TEXT_TABLE_NAME) {
 		table := TextTable(path)
-		utils.SetLogFile(table.Path, "dump")
-
 		dumpTable(table, pool, config)
 	}
 }

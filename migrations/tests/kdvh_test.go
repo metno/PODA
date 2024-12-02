@@ -1,4 +1,4 @@
-package main
+package tests
 
 import (
 	"context"
@@ -39,7 +39,7 @@ func (t *KdvhTestCase) mockConfig() (*port.Config, *cache.Cache) {
 					IsScalar: true,
 				},
 			},
-			Permits: &lard.PermitMaps{
+			Permits: lard.PermitMaps{
 				StationPermits: lard.StationPermitMap{
 					t.station: t.permit,
 				},

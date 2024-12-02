@@ -11,10 +11,11 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"migrate/kdvh/db"
+	"migrate/utils"
 )
 
 // Map of `from_time` and `to_time` for each (table, station, element) triplet. Not present for all parameters
-type KDVHMap = map[KDVHKey]Timespan
+type KDVHMap = map[KDVHKey]utils.TimeSpan
 
 // Used for lookup of fromtime and totime from KDVH
 type KDVHKey struct {
@@ -26,12 +27,7 @@ func newKDVHKey(elem, table string, stnr int32) KDVHKey {
 	return KDVHKey{StinfoKey{ElemCode: elem, TableName: table}, stnr}
 }
 
-// Timespan stored in KDVH for a given (table, station, element) triplet
-type Timespan struct {
-	FromTime *time.Time `db:"fdato"`
-	ToTime   *time.Time `db:"tdato"`
-}
-
+// Cache timeseries timespan from KDVH
 func cacheKDVH(tables, stations, elements []string, kdvh *db.KDVH) KDVHMap {
 	cache := make(KDVHMap)
 
@@ -67,13 +63,14 @@ func cacheKDVH(tables, stations, elements []string, kdvh *db.KDVH) KDVHMap {
 
 		for rows.Next() {
 			var key KDVHKey
-			var span Timespan
+			var span utils.TimeSpan
+
 			err := rows.Scan(
 				&key.Inner.TableName,
 				&key.Station,
 				&key.Inner.ElemCode,
-				&span.FromTime,
-				&span.ToTime,
+				&span.From,
+				&span.To,
 			)
 
 			if err != nil {
