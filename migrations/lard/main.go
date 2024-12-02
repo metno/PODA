@@ -2,7 +2,7 @@ package lard
 
 import "time"
 
-const LARD_ENV_VAR string = "LARD_STRING"
+const LARD_ENV_VAR string = "LARD_CONN_STRING"
 
 // Struct mimicking the `public.data` table
 type DataObs struct {
