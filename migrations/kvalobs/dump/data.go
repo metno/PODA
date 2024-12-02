@@ -23,20 +23,11 @@ func DataTable(path string) db.DataTable {
 }
 
 func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, error) {
-	// TODO: not sure about the sensor/level conditions,
-	// they should never be NULL since they have default values different from NULL?
-	// TODO: We probably don't even need the join,
-	// because `name` (`param_code`) is not present in our `labels.met`?
-	// query := `SELECT DISTINCT stationid, typeid, paramid, sensor::int, level, name FROM data
-	//              LEFT JOIN param USING (paramid)
-	//              WHERE name IS NOT NUL
-	//                AND sensor IS NOT NULL
-	//                AND level IS NOT NULL
-	//                AND ($1::timestamp IS NULL OR obstime >= $1)
-	//                AND ($2::timestamp IS NULL OR obstime < $2)`
-	query := `SELECT DISTINCT stationid, typeid, paramid, sensor::int, level FROM data
-              WHERE ($1::timestamp IS NULL OR obstime >= $1) AND ($2::timestamp IS NULL OR obstime < $2)
-              ORDER BY stationid`
+	query := `SELECT DISTINCT stationid, typeid, paramid, sensor::int, level 
+                FROM data
+                WHERE ($1::timestamp IS NULL OR obstime >= $1) 
+                  AND ($2::timestamp IS NULL OR obstime < $2)
+                ORDER BY stationid`
 
 	slog.Info("Querying data labels...")
 	rows, err := pool.Query(context.TODO(), query, timespan.From, timespan.To)
@@ -57,32 +48,6 @@ func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, 
 }
 
 func dumpDataSeries(label *db.Label, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
-	// TODO: is the case useful here, we can just check for cfailed = '' in here
-	// query := `SELECT
-	// 			obstime,
-	// 			original,
-	// 			tbtime,
-	// 			CASE
-	// 				WHEN original = corrected AND cfailed = '' THEN NULL
-	// 				ELSE corrected
-	// 			END,
-	// 			controlinfo,
-	// 			useinfo,
-	// 			cfailed
-	// 		FROM
-	// 			data
-	// 		WHERE
-	// 			stationid = $1
-	// 			AND typeid = $2
-	// 			AND paramid = $3
-	// 			AND sensor = $4
-	// 			AND level = $5
-	// 			AND obstime >= $6
-	// TODO: should we keep these? Maybe obstime is actually useful
-	// 		ORDER BY
-	// 			stationid,
-	// 			obstime`
-
 	// NOTE: sensor and level could be NULL, but in reality they have default values
 	query := `SELECT obstime, original, tbtime, corrected, controlinfo, useinfo, cfailed
                 FROM data
@@ -91,8 +56,8 @@ func dumpDataSeries(label *db.Label, timespan *utils.TimeSpan, pool *pgxpool.Poo
                   AND paramid = $3
                   AND sensor = $4
                   AND level = $5
-                AND ($6::timestamp IS NULL OR obstime >= $6)
-                AND ($7::timestamp IS NULL OR obstime < $7)
+                  AND ($6::timestamp IS NULL OR obstime >= $6)
+                  AND ($7::timestamp IS NULL OR obstime < $7)
                 ORDER BY obstime`
 
 	// Convert to string because `sensor` in Kvalobs is a BPCHAR(1)

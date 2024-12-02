@@ -13,11 +13,6 @@ import (
 	"migrate/lard"
 )
 
-func readDataFiles() []lard.Label {
-	// TODO:
-	return nil
-}
-
 // Returns a DataTable for import
 func DataTable(path string) db.DataTable {
 	return db.DataTable{
