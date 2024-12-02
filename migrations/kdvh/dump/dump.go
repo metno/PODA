@@ -20,6 +20,9 @@ import (
 var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
 
 func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
+	fmt.Printf("Dumping %s...\n", table.TableName)
+	defer fmt.Println(strings.Repeat("- ", 50))
+
 	if err := os.MkdirAll(filepath.Join(config.Path, table.Path), os.ModePerm); err != nil {
 		slog.Error(err.Error())
 		return
@@ -40,23 +43,26 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 	// Used to limit connections to the database
 	semaphore := make(chan struct{}, config.MaxConn)
 
-	bar := utils.NewBar(len(stations), table.TableName)
-	bar.RenderBlank()
 	for _, station := range stations {
-		path := filepath.Join(config.Path, table.Path, string(station))
+		path := filepath.Join(config.Path, table.Path, station)
 		if err := os.MkdirAll(path, os.ModePerm); err != nil {
 			slog.Error(err.Error())
 			return
 		}
 
+		bar := utils.NewBar(len(elements), fmt.Sprint("    "+station))
+
 		var wg sync.WaitGroup
 		for _, element := range elements {
+			wg.Add(1)
+
 			// This blocks if the channel is full
 			semaphore <- struct{}{}
-
-			wg.Add(1)
 			go func() {
-				defer wg.Done()
+				defer func() {
+					wg.Done()
+					bar.Add(1)
+				}()
 
 				err := dumpFunc(
 					path,
@@ -78,7 +84,6 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 			}()
 		}
 		wg.Wait()
-		bar.Add(1)
 	}
 }
 

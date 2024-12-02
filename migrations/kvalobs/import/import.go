@@ -19,7 +19,7 @@ import (
 )
 
 func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cache.Cache, pool *pgxpool.Pool, config *Config) (int64, error) {
-	fmt.Println("Importing from " + table.Path)
+	fmt.Printf("Importing from %q...\n", table.Path)
 	defer fmt.Println(strings.Repeat("- ", 50))
 
 	stations, err := os.ReadDir(table.Path)
@@ -93,7 +93,7 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cach
 
 				count, err := table.Import(ts, pool, labelStr)
 				if err != nil {
-					slog.Error(labelStr + "Failed bulk insertion: " + err.Error())
+					slog.Error(labelStr + "Failed bulk insertion - " + err.Error())
 					return
 				}
 

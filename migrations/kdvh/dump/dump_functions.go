@@ -41,7 +41,7 @@ func fileExists(filename string, overwrite bool) error {
 	if _, err := os.Stat(filename); err == nil && !overwrite {
 		return errors.New(
 			fmt.Sprintf(
-				"Skipping dump of '%s' because dumped file already exists and the --overwrite flag was not provided",
+				"Skipping dump of %q because dumped file already exists and the --overwrite flag was not provided",
 				filename,
 			))
 	}
@@ -59,12 +59,12 @@ func fetchYearRange(tableName, station string, pool *pgxpool.Pool) (int64, int64
 
 	begin, err := strconv.ParseInt(beginStr, 10, 64)
 	if err != nil {
-		return 0, 0, fmt.Errorf("Could not parse year '%s': %s", beginStr, err)
+		return 0, 0, fmt.Errorf("Could not parse year %q: %s", beginStr, err)
 	}
 
 	end, err := strconv.ParseInt(endStr, 10, 64)
 	if err != nil {
-		return 0, 0, fmt.Errorf("Could not parse year '%s': %s", endStr, err)
+		return 0, 0, fmt.Errorf("Could not parse year %q: %s", endStr, err)
 	}
 
 	return begin, end, nil

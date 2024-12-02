@@ -94,7 +94,7 @@ func getStationLabelMap(labels []*db.Label) map[int32][]*db.Label {
 }
 
 func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool.Pool, config *Config) {
-	fmt.Println("Importing from " + table.Path)
+	fmt.Printf("Dumping to %q...\n", table.Path)
 	defer fmt.Println(strings.Repeat("- ", 50))
 
 	labels, err := getLabels(table, pool, config)
