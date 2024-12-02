@@ -94,8 +94,12 @@ func getStationLabelMap(labels []*db.Label) map[int32][]*db.Label {
 }
 
 func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool.Pool, config *Config) {
+	utils.SetLogFile(table.Path, "dump")
 	fmt.Printf("Dumping to %q...\n", table.Path)
-	defer fmt.Println(strings.Repeat("- ", 50))
+	defer func() {
+		fmt.Println(strings.Repeat("- ", 50))
+		log.SetOutput(os.Stdout)
+	}()
 
 	labels, err := getLabels(table, pool, config)
 	if err != nil {
@@ -104,9 +108,6 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 
 	stationMap := getStationLabelMap(labels)
 	timespan := config.TimeSpan()
-
-	utils.SetLogFile(table.Path, "dump")
-	defer log.SetOutput(os.Stdout)
 
 	// Used to limit connections to the database
 	semaphore := make(chan struct{}, config.MaxConn)
@@ -126,7 +127,8 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 
 		// TODO: this bar is a bit deceiving if you don't dump all the labels
 		// Maybe should only cache the ones requested from cli?
-		bar := utils.NewBar(len(labels), fmt.Sprint(station))
+		bar := utils.NewBar(len(labels), fmt.Sprintf("    %v", station))
+		bar.RenderBlank()
 
 		for _, label := range labels {
 			wg.Add(1)

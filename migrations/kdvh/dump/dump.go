@@ -3,6 +3,7 @@ package dump
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -21,7 +22,10 @@ var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
 
 func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 	fmt.Printf("Dumping %s...\n", table.TableName)
-	defer fmt.Println(strings.Repeat("- ", 50))
+	defer func() {
+		fmt.Println(strings.Repeat("- ", 50))
+		log.SetOutput(os.Stdout)
+	}()
 
 	if err := os.MkdirAll(filepath.Join(config.Path, table.Path), os.ModePerm); err != nil {
 		slog.Error(err.Error())
@@ -51,6 +55,7 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 		}
 
 		bar := utils.NewBar(len(elements), fmt.Sprint("    "+station))
+		bar.RenderBlank()
 
 		var wg sync.WaitGroup
 		for _, element := range elements {

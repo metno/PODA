@@ -20,7 +20,10 @@ import (
 
 func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cache.Cache, pool *pgxpool.Pool, config *Config) (int64, error) {
 	fmt.Printf("Importing from %q...\n", table.Path)
-	defer fmt.Println(strings.Repeat("- ", 50))
+	defer func() {
+		fmt.Println(strings.Repeat("- ", 50))
+		log.SetOutput(os.Stdout)
+	}()
 
 	stations, err := os.ReadDir(table.Path)
 	if err != nil {
@@ -43,6 +46,8 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cach
 		}
 
 		bar := utils.NewBar(len(labels), fmt.Sprint("   "+station.Name()))
+		bar.RenderBlank()
+
 		var wg sync.WaitGroup
 		for _, file := range labels {
 			wg.Add(1)
@@ -111,7 +116,6 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cach
 	slog.Info(outputStr)
 	fmt.Println(outputStr)
 
-	log.SetOutput(os.Stdout)
 	return rowsInserted, nil
 }
 

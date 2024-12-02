@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -26,7 +27,10 @@ var INVALID_ELEMENTS = []string{"TYPEID", "TAM_NORMAL_9120", "RRA_NORMAL_9120", 
 
 func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (rowsInserted int64) {
 	fmt.Printf("Importing %s...\n", table.TableName)
-	defer fmt.Println(strings.Repeat("- ", 50))
+	defer func() {
+		fmt.Println(strings.Repeat("- ", 50))
+		log.SetOutput(os.Stdout)
+	}()
 
 	stations, err := os.ReadDir(filepath.Join(config.Path, table.Path))
 	if err != nil {
@@ -53,6 +57,8 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 		}
 
 		bar := utils.NewBar(len(elements), fmt.Sprint("    "+station.Name()))
+		bar.RenderBlank()
+
 		var wg sync.WaitGroup
 		for _, element := range elements {
 			wg.Add(1)
