@@ -9,8 +9,8 @@ import (
 // 2) `histkvalobs` for data older than <not sure how long, 2-3 months?>
 //
 // Both contain the same tables:
-// - `algorithms`: empty (???) - stores procedure info for QC checks
-// - `checks`: empty (???)
+// - `algorithms`: stores procedure code (!!!) for QC checks
+// - `checks`: stores tags and signatures of QC tests
 // - `data`: stores numerical observations, associated metadata, and QC info
 //
 //       Column    |            Type             | Collation | Nullable |          Default
@@ -29,25 +29,9 @@ import (
 //     cfailed     | text                        |           |          |
 //
 // - `default_missing`:
-// - `default_missing_values`:
-//
-// - `model`:
-//     Column  |  Type   | Collation | Nullable | Default
-//    ---------+---------+-----------+----------+---------
-//     modelid | integer |           | not null |
-//     name    | text    |           |          |
-//     comment | text    |           |          |
-//
-// - `model_data`:
-//      Column   |            Type             | Collation | Nullable | Default
-//    -----------+-----------------------------+-----------+----------+---------
-//     stationid | integer                     |           | not null |
-//     obstime   | timestamp without time zone |           | not null |
-//     paramid   | integer                     |           | not null |
-//     level     | integer                     |           | not null |
-//     modelid   | integer                     |           | not null |
-//     original  | double precision            |           |          |
-//
+// - `default_missing_values`: default values for some paramids (-32767)
+// - `model`: stores model names
+// - `model_data`: stores model data for different stations, paramids, etc.
 // - `param`: part of stinfosys `param` table
 //      Column    |  Type   | Collation | Nullable | Default
 //   -------------+---------+-----------+----------+---------
@@ -59,10 +43,11 @@ import (
 //    comment     | text    |           |          |
 //    scalar      | boolean |           |          | true
 //
-// - `pdata`: same as `data` without the `original` column and all `paramid` null???
+//   TODO: should we dump this one as well?
+// - `pdata`: same structure as data?
 // - `station`: station metadata such as (lat, lon, height, name, wmonr, etc)
-// - `station_metadata`: this one seems to map well to our `labels.met`?
-//                       Problem is `typeid`, `sensor`, and `level` are always NULL
+// - `station_metadata`: Stores fromtime and totime for `stationid` and optionally `paramid`.
+//                       `typeid`, `sensor`, and `level` are always NULL.
 //
 // - `text_data`: Similar to `data`, but without QC info nor sensor/level
 //
@@ -75,7 +60,7 @@ import (
 //     tbtime    | timestamp without time zone |           | not null |
 //     typeid    | integer                     |           | not null |
 //
-// In `histkvalobs` only data tables seem to be non-empty
+// NOTE: In `histkvalobs` only `data` and `text_data` are non-empty.
 //
 // IMPORTANT: considerations for migrations to LARD
 //            - LARD stores Timeseries labels (stationid, paramid, typeid, sensor, level) in a separate table
