@@ -169,12 +169,12 @@ func dumpDB(database db.DB, config *Config) {
 		return
 	}
 
-	if config.ChosenTable(db.DATA_TABLE_NAME) {
+	if utils.IsEmptyOrEqual(config.Table, db.DATA_TABLE_NAME) {
 		table := DataTable(path)
 		dumpTable(table, pool, config)
 	}
 
-	if config.ChosenTable(db.TEXT_TABLE_NAME) {
+	if utils.IsEmptyOrEqual(config.Table, db.TEXT_TABLE_NAME) {
 		table := TextTable(path)
 		dumpTable(table, pool, config)
 	}

@@ -11,6 +11,7 @@ import (
 	"migrate/kvalobs/db"
 	"migrate/kvalobs/import/cache"
 	"migrate/lard"
+	"migrate/utils"
 )
 
 type Config struct {
@@ -27,11 +28,11 @@ func (config *Config) Execute() error {
 	}
 	defer pool.Close()
 
-	if config.ChosenDB(kvalobs.Name) {
+	if utils.IsEmptyOrEqual(config.Database, kvalobs.Name) {
 		ImportDB(kvalobs, cache, pool, config)
 	}
 
-	if config.ChosenDB(histkvalobs.Name) {
+	if utils.IsEmptyOrEqual(config.Database, histkvalobs.Name) {
 		ImportDB(histkvalobs, cache, pool, config)
 	}
 

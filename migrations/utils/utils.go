@@ -30,6 +30,10 @@ func NewBar(size int, description string) *progressbar.ProgressBar {
 	)
 }
 
+func IsEmptyOrEqual(first, second string) bool {
+	return first == "" || first == second
+}
+
 // Filters elements of a slice by comparing them to the elements of a reference slice.
 // formatMsg is an optional format string with a single format argument that can be used
 // to add context on why the element may be missing from the reference slice
