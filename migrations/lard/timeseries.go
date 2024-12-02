@@ -16,6 +16,13 @@ type Label struct {
 	Level     *int32
 }
 
+func (l *Label) sensorLevelAreBothZero() bool {
+	if l.Sensor == nil || l.Level == nil {
+		return false
+	}
+	return *l.Level == 0 && *l.Sensor == 0
+}
+
 func GetTimeseriesID(label *Label, fromtime time.Time, pool *pgxpool.Pool) (tsid int32, err error) {
 	// Query LARD labels table
 	err = pool.QueryRow(
@@ -33,7 +40,28 @@ func GetTimeseriesID(label *Label, fromtime time.Time, pool *pgxpool.Pool) (tsid
 		return tsid, nil
 	}
 
-	// Otherwise insert new timeseries
+	// In KDVH and Kvalobs sensor and level have default values, while in LARD they are NULL
+	// if Obsinn does not specify them. Therefore we need to check if sensor and level are NULL
+	// when they are both zero.
+	// FIXME(?): in some cases, level and sensor are marked with (0,0) in Obsinn,
+	// so there might be problems if a timeseries is not present in LARD at the time of importing
+	if label.sensorLevelAreBothZero() {
+		err := pool.QueryRow(
+			context.TODO(),
+			`SELECT timeseries FROM labels.met
+                WHERE station_id = $1
+                AND param_id = $2
+                AND type_id = $3
+                AND lvl IS NULL
+                AND sensor IS NULL`,
+			label.StationID, label.ParamID, label.TypeID).Scan(&tsid)
+
+		if err == nil {
+			return tsid, nil
+		}
+	}
+
+	// If none of the above worked insert a new timeseries
 	transaction, err := pool.Begin(context.TODO())
 	if err != nil {
 		return tsid, err
