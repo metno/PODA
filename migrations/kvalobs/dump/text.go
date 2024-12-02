@@ -22,44 +22,12 @@ func TextTable(path string) db.TextTable {
 }
 
 func dumpTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, error) {
-	// OGquery := `SELECT DISTINCT
-	//            stationid,
-	//            typeid,
-	//            paramid,
-	//            0 AS sensor,
-	//            0 AS level,
-	//            name AS code
-	//        FROM
-	//            text_data
-	//        LEFT JOIN
-	//            param USING (paramid)
-	//        WHERE
-	//            obstime >= $1
-	// TODO: probably don't need this?
-	//            AND obstime <= $2
-	//            AND name IS NOT NULL
-	// TODO: do we need this order by? As far as I can see,
-	// it's used to compare text_data and scalar_data timeseries
-	//        ORDER BY
-	//            stationid,
-	//            typeid,
-	//            paramid,
-	//            level,
-	//            sensor`
-
 	// NOTE: `param` table is empty in histkvalobs
-	// TODO: We probably don't even need the join,
-	// because `name` (`param_code`) is not present in our `labels.met`?
-	// query := `SELECT DISTINCT stationid, typeid, paramid, name FROM text_data
-	//              LEFT JOIN param USING (paramid)
-	//              WHERE name IS NOT NULL
-	//                AND ($1::timestamp IS NULL OR obstime >= $1)
-	//                AND ($2::timestamp IS NULL OR obstime < $2)`
-	//
-	// TODO: should sensor/level be NULL or 0
-	query := `SELECT DISTINCT stationid, typeid, paramid, NULL AS sensor, NULL AS level FROM text_data
-              WHERE ($1::timestamp IS NULL OR obstime >= $1) AND ($2::timestamp IS NULL OR obstime < $2)
-              ORDER BY stationid`
+	query := `SELECT DISTINCT stationid, typeid, paramid, NULL AS sensor, NULL AS level
+                FROM text_data
+                WHERE ($1::timestamp IS NULL OR obstime >= $1) 
+                  AND ($2::timestamp IS NULL OR obstime < $2)
+                ORDER BY stationid`
 
 	slog.Info("Querying text labels...")
 	rows, err := pool.Query(context.TODO(), query, timespan.From, timespan.To)
@@ -80,23 +48,6 @@ func dumpTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, 
 }
 
 func dumpTextSeries(label *db.Label, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
-	// query := `
-	//        SELECT
-	//            obstime,
-	//            original AS originaltext,
-	//            tbtime
-	//        FROM
-	//            text_data
-	//        WHERE
-	//            stationid = $1
-	//            AND typeid = $2
-	//            AND paramid = $3
-	//            AND obstime >= $4
-	//            AND obstime <= $5
-	// TODO: should we keep these? Maybe obstime is actually useful
-	//        ORDER BY
-	//            stationid,
-	//            obstime`
 	query := `SELECT obstime, original, tbtime FROM text_data
                 WHERE stationid = $1
                   AND typeid = $2

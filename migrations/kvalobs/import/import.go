@@ -68,7 +68,6 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 				}
 
 				lardLabel := lard.Label(*label)
-				// TODO: figure out if we should convert (0, 0) to (NULL, NULL) for sensor, level
 				// TODO: figure out where to get fromtime, kvalobs directly? Stinfosys?
 				tsid, err := lard.GetTimeseriesID(&lardLabel, time.Now(), pool)
 				if err != nil {
@@ -106,7 +105,7 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 	return rowsInserted, nil
 }
 
-// TODO: here we trust that kvalobs and stinfosys have the same
+// TODO: while importing we trust that kvalobs and stinfosys have the same
 // non scalar parameters, which might not be the case
 func ImportDB(database db.DB, permits *lard.PermitMaps, pool *pgxpool.Pool, config *Config) {
 	path := filepath.Join(config.Path, database.Name)
