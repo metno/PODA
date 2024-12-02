@@ -173,9 +173,9 @@ func parseData(filename string, tsInfo *cache.TsInfo, convFunc ConvertFunction, 
 		}
 
 		// Only import data between KDVH's defined fromtime and totime
-		if tsInfo.Span.FromTime != nil && obsTime.Sub(*tsInfo.Span.FromTime) < 0 {
+		if tsInfo.Span.From != nil && obsTime.Sub(*tsInfo.Span.From) < 0 {
 			continue
-		} else if tsInfo.Span.ToTime != nil && obsTime.Sub(*tsInfo.Span.ToTime) > 0 {
+		} else if tsInfo.Span.To != nil && obsTime.Sub(*tsInfo.Span.To) > 0 {
 			break
 		}
 

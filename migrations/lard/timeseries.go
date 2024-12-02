@@ -2,7 +2,8 @@ package lard
 
 import (
 	"context"
-	"time"
+	"errors"
+	"migrate/utils"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -23,7 +24,7 @@ func (l *Label) sensorLevelAreBothZero() bool {
 	return *l.Level == 0 && *l.Sensor == 0
 }
 
-func GetTimeseriesID(label *Label, fromtime time.Time, pool *pgxpool.Pool) (tsid int32, err error) {
+func GetTimeseriesID(label *Label, timespan utils.TimeSpan, pool *pgxpool.Pool) (tsid int32, err error) {
 	// Query LARD labels table
 	err = pool.QueryRow(
 		context.TODO(),
@@ -61,16 +62,21 @@ func GetTimeseriesID(label *Label, fromtime time.Time, pool *pgxpool.Pool) (tsid
 		}
 	}
 
+	if timespan.From == nil {
+		return tsid, errors.New("Fromtime should never be null when creating new timeseries")
+	}
+
 	// If none of the above worked insert a new timeseries
 	transaction, err := pool.Begin(context.TODO())
 	if err != nil {
 		return tsid, err
 	}
 
+	// TODO: should we set `deactivated` to true if `totime` is not NULL?
 	err = transaction.QueryRow(
 		context.TODO(),
-		`INSERT INTO public.timeseries (fromtime) VALUES ($1) RETURNING id`,
-		fromtime,
+		`INSERT INTO public.timeseries (fromtime, totime) VALUES ($1, $2) RETURNING id`,
+		timespan.From, timespan.To,
 	).Scan(&tsid)
 	if err != nil {
 		return tsid, err

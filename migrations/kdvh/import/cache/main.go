@@ -10,13 +10,14 @@ import (
 
 	"migrate/kdvh/db"
 	"migrate/lard"
+	"migrate/utils"
 )
 
 type Cache struct {
 	Offsets OffsetMap
 	Stinfo  StinfoMap
 	KDVH    KDVHMap
-	Permits *lard.PermitMaps
+	Permits lard.PermitMaps
 }
 
 // Caches all the metadata needed for import of KDVH tables.
@@ -37,7 +38,7 @@ type TsInfo struct {
 	Element string
 	Offset  period.Period
 	Param   StinfoParam
-	Span    Timespan
+	Span    utils.TimeSpan
 	Logstr  string
 	IsOpen  bool
 }
@@ -54,9 +55,8 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 	}
 
 	// Check if data for this station/element is restricted
-	isOpen := cache.Permits.TimeseriesIsOpen(station, param.TypeID, param.ParamID)
-
 	// TODO: eventually use this to choose which table to use on insert
+	isOpen := cache.Permits.TimeseriesIsOpen(station, param.TypeID, param.ParamID)
 	if !isOpen {
 		slog.Warn(logstr + "Timeseries data is restricted")
 		return nil, errors.New("Restricted data")
@@ -66,7 +66,7 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 	offset := cache.Offsets[key.Inner]
 
 	// No need to check for `!ok`, timespan will be ignored if not in the map
-	span := cache.KDVH[key]
+	span, ok := cache.KDVH[key]
 
 	label := lard.Label{
 		StationID: station,
@@ -76,13 +76,13 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 		Level:     param.Hlevel,
 	}
 
-	tsid, err := lard.GetTimeseriesID(&label, param.Fromtime, pool)
+	// TODO: are Param.Fromtime and Span.From different?
+	timespan := utils.TimeSpan{From: &param.Fromtime, To: span.To}
+	tsid, err := lard.GetTimeseriesID(&label, timespan, pool)
 	if err != nil {
 		slog.Error(logstr + "could not obtain timeseries - " + err.Error())
 		return nil, err
 	}
-
-	// TODO: check if station is restricted
 
 	return &TsInfo{
 		Id:      tsid,

@@ -28,7 +28,7 @@ type PermitMaps struct {
 	StationPermits StationPermitMap
 }
 
-func NewPermitTables() *PermitMaps {
+func NewPermitTables() PermitMaps {
 	slog.Info("Connecting to Stinfosys to cache permits")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -40,7 +40,7 @@ func NewPermitTables() *PermitMaps {
 	}
 	defer conn.Close(ctx)
 
-	return &PermitMaps{
+	return PermitMaps{
 		ParamPermits:   cacheParamPermits(conn),
 		StationPermits: cacheStationPermits(conn),
 	}
