@@ -11,7 +11,7 @@ import (
 // Both contain the same tables:
 // - `algorithms`: stores procedure code (!!!) for QC checks
 // - `checks`: stores tags and signatures of QC tests
-// - `data`: stores numerical observations, associated metadata, and QC info
+// - `data`: a view that joins `observations` and `obsvalue`
 //
 //       Column    |            Type             | Collation | Nullable |          Default
 //    -------------+-----------------------------+-----------+----------+----------------------------
@@ -32,6 +32,36 @@ import (
 // - `default_missing_values`: default values for some paramids (-32767)
 // - `model`: stores model names
 // - `model_data`: stores model data for different stations, paramids, etc.
+//
+// - `observations`: stores sequential observation IDs for each observations (note the lack of paramid)
+//       Column     |            Type             | Collation | Nullable |
+//   ---------------+-----------------------------+-----------+----------+
+//    observationid | bigint                      |           | not null |
+//    stationid     | integer                     |           | not null |
+//    typeid        | integer                     |           | not null |
+//    obstime       | timestamp without time zone |           | not null |
+//    tbtime        | timestamp without time zone |           | not null |
+//
+// - `obsdata`: where the actual scalar data is stored
+//       Column     |       Type       | Collation | Nullable |          Default
+//   ---------------+------------------+-----------+----------+----------------------------
+//    observationid | bigint           |           |          |
+//    original      | double precision |           | not null |
+//    paramid       | integer          |           | not null |
+//    sensor        | character(1)     |           |          | '0'::bpchar
+//    level         | integer          |           |          | 0
+//    corrected     | double precision |           | not null |
+//    controlinfo   | character(16)    |           |          | '0000000000000000'::bpchar
+//    useinfo       | character(16)    |           |          | '0000000000000000'::bpchar
+//    cfailed       | text             |           |          |
+//
+// - `obstextdata`: where the actual text data is stored
+//       Column     |  Type   | Collation | Nullable | Default |
+//   ---------------+---------+-----------+----------+---------+
+//    observationid | bigint  |           |          |         |
+//    original      | text    |           | not null |         |
+//    paramid       | integer |           | not null |         |
+//
 // - `param`: part of stinfosys `param` table
 //      Column    |  Type   | Collation | Nullable | Default
 //   -------------+---------+-----------+----------+---------
@@ -43,13 +73,12 @@ import (
 //    comment     | text    |           |          |
 //    scalar      | boolean |           |          | true
 //
-//   TODO: should we dump this one as well?
-// - `pdata`: same structure as data?
+// - `pdata`: view similar to `data` but with paramid converted to param code
 // - `station`: station metadata such as (lat, lon, height, name, wmonr, etc)
 // - `station_metadata`: Stores fromtime and totime for `stationid` and optionally `paramid`.
 //                       `typeid`, `sensor`, and `level` are always NULL.
 //
-// - `text_data`: Similar to `data`, but without QC info nor sensor/level
+// - `text_data`: view that joins `observations` and `obstextdata`
 //
 //      Column   |            Type             | Collation | Nullable | Default
 //    -----------+-----------------------------+-----------+----------+---------
@@ -63,12 +92,12 @@ import (
 // NOTE: In `histkvalobs` only `data` and `text_data` are non-empty.
 //
 // IMPORTANT: considerations for migrations to LARD
-//            - LARD stores Timeseries labels (stationid, paramid, typeid, sensor, level) in a separate table
-//            - (sensor, level) can be NULL, while in Kvalobs they have default values (0,0)
-//                  => POSSIBLE INCONSISTENCY when importing to LARD
-//            - Timestamps are UTC
-//            - Kvalobs doesn't have the concept of timeseries ID,
-//              instead there is a sequential ID associated with each observation row
+//     - LARD stores Timeseries labels (stationid, paramid, typeid, sensor, level) in a separate table
+//     - (sensor, level) can be NULL, while in Kvalobs they have default values (0,0)
+//           => POSSIBLE INCONSISTENCY when importing to LARD
+//     - Timestamps are UTC
+//     - Kvalobs doesn't have the concept of timeseries ID,
+//       instead there is a sequential ID associated with each observation row
 
 const DATA_TABLE_NAME string = "data"
 const TEXT_TABLE_NAME string = "text" // text_data
