@@ -41,31 +41,31 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], permits *la
 		bar := utils.NewBar(len(labels), stationDir)
 		var wg sync.WaitGroup
 		for _, file := range labels {
-			// TODO: only add if label was processed?
-			bar.Add(1)
-
-			label, err := db.LabelFromFilename(file.Name())
-			if err != nil {
-				slog.Error(err.Error())
-				continue
-			}
-
-			if !config.ShouldProcessLabel(label) {
-				continue
-			}
-
-			labelStr := label.LogStr()
-
-			// Check if data for this station/element is restricted
-			if !permits.TimeseriesIsOpen(label.StationID, label.TypeID, label.ParamID) {
-				// TODO: eventually use this to choose which table to use on insert
-				slog.Warn(labelStr + "timeseries data is restricted, skipping")
-				continue
-			}
-
 			wg.Add(1)
 			go func() {
-				defer wg.Done()
+				defer func() {
+					wg.Done()
+					bar.Add(1)
+				}()
+
+				label, err := db.LabelFromFilename(file.Name())
+				if err != nil {
+					slog.Error(err.Error())
+					return
+				}
+
+				if !config.ShouldProcessLabel(label) {
+					return
+				}
+
+				labelStr := label.LogStr()
+
+				// Check if data for this station/element is restricted
+				if !permits.TimeseriesIsOpen(label.StationID, label.TypeID, label.ParamID) {
+					// TODO: eventually use this to choose which table to use on insert
+					slog.Warn(labelStr + "timeseries data is restricted, skipping")
+					return
+				}
 
 				lardLabel := lard.Label(*label)
 				// TODO: figure out if we should convert (0, 0) to (NULL, NULL) for sensor, level
