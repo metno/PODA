@@ -21,6 +21,12 @@ type Cache struct {
 	Permits lard.PermitMaps
 }
 
+func New(kvalobs db.DB) *Cache {
+	permits := lard.NewPermitTables()
+	timespans := cacheKvalobsTimeseriesTimespans(kvalobs)
+	return &Cache{Permits: permits, Meta: timespans}
+}
+
 func (c *Cache) GetSeriesTimespan(label *db.Label) (utils.TimeSpan, error) {
 	// First try to lookup timespan with both stationid and paramid
 	// TODO: should these timespans modify an existing timeseries in lard?
@@ -51,12 +57,6 @@ func (c *Cache) TimeseriesIsOpen(stnr, typeid, paramid int32) bool {
 type MetaKey struct {
 	Stationid int32
 	Paramid   sql.NullInt32
-}
-
-func New(kvalobs db.DB) *Cache {
-	permits := lard.NewPermitTables()
-	timespans := cacheKvalobsTimeseriesTimespans(kvalobs)
-	return &Cache{Permits: permits, Meta: timespans}
 }
 
 // Query kvalobs `station_metadata` table that stores timeseries timespans
