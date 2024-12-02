@@ -121,8 +121,9 @@ impl DataConnector for Connector {
         match space_spec {
             SpaceSpec::One(ts_id) => {
                 self.fetch_one(
-                    // TODO: deal with this unwrap
-                    ts_id.parse().unwrap(),
+                    ts_id
+                        .parse()
+                        .map_err(|_| data_switch::Error::InvalidSeriesId(ts_id.to_string()))?,
                     time_spec,
                     num_leading_points,
                     num_trailing_points,
