@@ -62,13 +62,13 @@ func New(kvalobs db.DB) *Cache {
 func cacheKvalobsTimeseriesTimespans(kvalobs db.DB) KvalobsTimespan {
 	cache := make(KvalobsTimespan)
 
-	slog.Info("Connecting to Stinfosys to cache metadata")
+	slog.Info("Connecting to Kvalobs to cache metadata")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
 	conn, err := pgx.Connect(ctx, os.Getenv(kvalobs.ConnEnvVar))
 	if err != nil {
-		slog.Error("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
+		slog.Error("Could not connect to Kvalobs. Make sure to be connected to the VPN. " + err.Error())
 		os.Exit(1)
 	}
 	defer conn.Close(ctx)

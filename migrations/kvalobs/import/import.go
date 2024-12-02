@@ -45,7 +45,7 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cach
 			continue
 		}
 
-		bar := utils.NewBar(len(labels), fmt.Sprint("   "+station.Name()))
+		bar := utils.NewBar(len(labels), fmt.Sprintf("%10s", station.Name()))
 		bar.RenderBlank()
 
 		var wg sync.WaitGroup
@@ -53,8 +53,8 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cach
 			wg.Add(1)
 			go func() {
 				defer func() {
-					wg.Done()
 					bar.Add(1)
+					wg.Done()
 				}()
 
 				label, err := db.LabelFromFilename(file.Name())
