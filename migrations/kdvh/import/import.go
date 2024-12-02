@@ -25,6 +25,9 @@ import (
 var INVALID_ELEMENTS = []string{"TYPEID", "TAM_NORMAL_9120", "RRA_NORMAL_9120", "OT", "OTN", "OTX", "DD06", "DD12", "DD18"}
 
 func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (rowsInserted int64) {
+	fmt.Printf("Importing %s...\n", table.TableName)
+	defer fmt.Println(strings.Repeat("- ", 50))
+
 	stations, err := os.ReadDir(filepath.Join(config.Path, table.Path))
 	if err != nil {
 		slog.Warn(err.Error())
@@ -49,21 +52,23 @@ func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config
 			continue
 		}
 
-		bar := utils.NewBar(len(elements), stationDir)
+		bar := utils.NewBar(len(elements), fmt.Sprint("    "+station.Name()))
 		var wg sync.WaitGroup
 		for _, element := range elements {
-			bar.Add(1)
-			elemCode, err := getElementCode(element, config.Elements)
-			if err != nil {
-				if config.Verbose {
-					slog.Info(err.Error())
-				}
-				continue
-			}
-
 			wg.Add(1)
 			go func() {
-				defer wg.Done()
+				defer func() {
+					wg.Done()
+					bar.Add(1)
+				}()
+
+				elemCode, err := getElementCode(element, config.Elements)
+				if err != nil {
+					if config.Verbose {
+						slog.Info(err.Error())
+					}
+					return
+				}
 
 				tsInfo, err := cache.NewTsInfo(table.TableName, elemCode, stnr, pool)
 				if err != nil {
@@ -132,11 +137,11 @@ func getElementCode(element os.DirEntry, elementList []string) (string, error) {
 	elemCode := strings.ToUpper(strings.TrimSuffix(element.Name(), ".csv"))
 
 	if len(elementList) > 0 && !slices.Contains(elementList, elemCode) {
-		return "", errors.New(fmt.Sprintf("Element '%s' not in the list, skipping", elemCode))
+		return "", errors.New(fmt.Sprintf("Element %q not in the list, skipping", elemCode))
 	}
 
 	if elemcodeIsInvalid(elemCode) {
-		return "", errors.New(fmt.Sprintf("Element '%s' not set for import, skipping", elemCode))
+		return "", errors.New(fmt.Sprintf("Element %q not set for import, skipping", elemCode))
 	}
 	return elemCode, nil
 }

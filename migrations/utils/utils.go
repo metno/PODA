@@ -43,7 +43,7 @@ func FilterSlice[T comparable](slice, reference []T, formatMsg string) []T {
 	}
 
 	if formatMsg == "" {
-		formatMsg = "Value '%s' not present in reference slice, skipping"
+		formatMsg = "Value '%v' not present in reference slice, skipping"
 	}
 
 	// I hate this so much
@@ -72,7 +72,7 @@ func SetLogFile(table, procedure string) {
 	filename := fmt.Sprintf("%s_%s_log.txt", table, procedure)
 	fh, err := os.Create(filename)
 	if err != nil {
-		slog.Error(fmt.Sprintf("Could not create log '%s': %s", filename, err))
+		slog.Error(fmt.Sprintf("Could not create log %q: %s", filename, err))
 		return
 	}
 	log.SetOutput(fh)
