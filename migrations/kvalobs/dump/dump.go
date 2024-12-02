@@ -119,6 +119,11 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 			continue
 		}
 
+		if err := os.MkdirAll(stationPath, os.ModePerm); err != nil {
+			slog.Error(err.Error())
+			return
+		}
+
 		// TODO: this bar is a bit deceiving if you don't dump all the labels
 		// Maybe should only cache the ones requested from cli?
 		bar := utils.NewBar(len(labels), fmt.Sprint(station))
