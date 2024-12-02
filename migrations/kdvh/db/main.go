@@ -1,7 +1,6 @@
 package db
 
 const KDVH_ENV_VAR string = "KDVH_PROXY_CONN"
-const STINFO_ENV_VAR string = "STINFO_STRING"
 
 // Map of all tables found in KDVH, with set max import year
 type KDVH struct {

@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"migrate/kdvh/db"
+	"migrate/lard"
 )
 
 // Map of metadata used to query timeseries ID in LARD
@@ -39,7 +40,7 @@ func cacheStinfoMeta(tables, elements []string, kdvh *db.KDVH) StinfoMap {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := pgx.Connect(ctx, os.Getenv(db.STINFO_ENV_VAR))
+	conn, err := pgx.Connect(ctx, os.Getenv(lard.STINFO_ENV_VAR))
 	if err != nil {
 		slog.Error("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
 		os.Exit(1)
