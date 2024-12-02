@@ -38,8 +38,8 @@ type Flag struct {
 	Id int32
 	// Time of observation
 	Obstime time.Time
-	// Corrected value after QC tests
-	Corrected *float32
+	// Original value after QC tests
+	Original *float32
 	// Flag encoding quality control status
 	Controlinfo *string
 	// Flag encoding quality control status
@@ -50,5 +50,5 @@ type Flag struct {
 
 func (o *Flag) ToRow() []any {
 	// "timeseries", "obstime", "corrected","controlinfo", "useinfo", "cfailed"
-	return []any{o.Id, o.Obstime, o.Corrected, o.Controlinfo, o.Useinfo, o.Cfailed}
+	return []any{o.Id, o.Obstime, o.Original, o.Controlinfo, o.Useinfo, o.Cfailed}
 }

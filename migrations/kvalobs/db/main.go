@@ -88,7 +88,9 @@ import (
 const DATA_TABLE_NAME string = "data"
 const TEXT_TABLE_NAME string = "text" // text_data
 
-var NULL_VALUES []float64 = []float64{-34767, -34766}
+// Special values that are treated as NULL in Kvalobs
+// TODO: are there more values we should be looking for?
+var NULL_VALUES []float32 = []float32{-32767, -32766}
 
 type DataSeries = []*DataObs
 
