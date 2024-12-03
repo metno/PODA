@@ -11,7 +11,8 @@ import (
 
 type Config struct {
 	db.BaseConfig
-	UpdateLabels bool `help:"Overwrites the label CSV files"`
+	LabelsOnly   bool `arg:"--labels-only" help:"Only dump labels"`
+	UpdateLabels bool `arg:"--labels-update" help:"Overwrites the label CSV files"`
 	MaxConn      int  `arg:"-n" default:"4" help:"Max number of allowed concurrent connections to Kvalobs"`
 }
 
