@@ -8,7 +8,6 @@ import (
 
 // Maps to `data` and `text_data` tables in Kvalobs
 type Table[S DataSeries | TextSeries] struct {
-	// Name       string         // Name of the table
 	Path       string         // Path of the dumped table
 	DumpLabels LabelDumpFunc  // Function that dumps labels from the table
 	DumpSeries ObsDumpFunc[S] // Function that dumps observations from the table
