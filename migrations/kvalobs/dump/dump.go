@@ -3,7 +3,6 @@ package dump
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -96,10 +95,7 @@ func getStationLabelMap(labels []*db.Label) map[int32][]*db.Label {
 func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool.Pool, config *Config) {
 	utils.SetLogFile(table.Path, "dump")
 	fmt.Printf("Dumping to %q...\n", table.Path)
-	defer func() {
-		fmt.Println(strings.Repeat("- ", 50))
-		log.SetOutput(os.Stdout)
-	}()
+	defer fmt.Println(strings.Repeat("- ", 50))
 
 	labels, err := getLabels(table, pool, config)
 	if err != nil {

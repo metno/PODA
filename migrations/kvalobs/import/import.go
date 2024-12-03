@@ -2,7 +2,6 @@ package port
 
 import (
 	"fmt"
-	"log"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -20,10 +19,7 @@ import (
 
 func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cache.Cache, pool *pgxpool.Pool, config *Config) (int64, error) {
 	fmt.Printf("Importing from %q...\n", table.Path)
-	defer func() {
-		fmt.Println(strings.Repeat("- ", 50))
-		log.SetOutput(os.Stdout)
-	}()
+	defer fmt.Println(strings.Repeat("- ", 50))
 
 	stations, err := os.ReadDir(table.Path)
 	if err != nil {
