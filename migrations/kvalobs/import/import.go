@@ -19,7 +19,7 @@ import (
 
 func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cache.Cache, pool *pgxpool.Pool, config *Config) (int64, error) {
 	fmt.Printf("Importing from %q...\n", table.Path)
-	defer fmt.Println(strings.Repeat("- ", 50))
+	defer fmt.Println(strings.Repeat("- ", 40))
 
 	stations, err := os.ReadDir(table.Path)
 	if err != nil {

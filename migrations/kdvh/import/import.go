@@ -26,7 +26,7 @@ var INVALID_ELEMENTS = []string{"TYPEID", "TAM_NORMAL_9120", "RRA_NORMAL_9120", 
 
 func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (rowsInserted int64) {
 	fmt.Printf("Importing %s...\n", table.TableName)
-	defer fmt.Println(strings.Repeat("- ", 50))
+	defer fmt.Println(strings.Repeat("- ", 40))
 
 	stations, err := os.ReadDir(filepath.Join(config.Path, table.Path))
 	if err != nil {
