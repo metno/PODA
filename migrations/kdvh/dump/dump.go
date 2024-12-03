@@ -21,7 +21,7 @@ var INVALID_COLUMNS = []string{"dato", "stnr", "typeid", "season", "xxx"}
 
 func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 	fmt.Printf("Dumping %s...\n", table.TableName)
-	defer fmt.Println(strings.Repeat("- ", 50))
+	defer fmt.Println(strings.Repeat("- ", 40))
 
 	if err := os.MkdirAll(filepath.Join(config.Path, table.Path), os.ModePerm); err != nil {
 		slog.Error(err.Error())

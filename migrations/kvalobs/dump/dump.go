@@ -16,37 +16,6 @@ import (
 	"migrate/utils"
 )
 
-func readLabelCSV(filename string) (labels []*db.Label, err error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		slog.Error(err.Error())
-		return nil, err
-	}
-	defer file.Close()
-
-	slog.Info("Reading previously dumped labels...")
-	err = gocsv.Unmarshal(file, &labels)
-	if err != nil {
-		slog.Error(err.Error())
-	}
-	return labels, err
-}
-
-func writeLabelCSV(path string, labels []*db.Label) error {
-	file, err := os.Create(path)
-	if err != nil {
-		slog.Error(err.Error())
-		return err
-	}
-
-	slog.Info("Writing timeseries labels to " + path)
-	err = gocsv.Marshal(labels, file)
-	if err != nil {
-		slog.Error(err.Error())
-	}
-	return err
-}
-
 func writeSeriesCSV[S db.DataSeries | db.TextSeries](series S, path string, label *db.Label) error {
 	filename := filepath.Join(path, label.ToFilename())
 	file, err := os.Create(filename)
@@ -73,9 +42,9 @@ func getLabels[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 		if err != nil {
 			return nil, err
 		}
-		return labels, writeLabelCSV(labelFile, labels)
+		return labels, db.WriteLabelCSV(labelFile, labels)
 	}
-	return readLabelCSV(labelFile)
+	return db.ReadLabelCSV(labelFile)
 }
 
 func getStationLabelMap(labels []*db.Label) map[int32][]*db.Label {
@@ -93,7 +62,7 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 		utils.SetLogFile(table.Path, "dump")
 	}
 	fmt.Printf("Dumping to %q...\n", table.Path)
-	defer fmt.Println(strings.Repeat("- ", 50))
+	defer fmt.Println(strings.Repeat("- ", 40))
 
 	labels, err := getLabels(table, pool, config)
 	if err != nil || config.LabelsOnly {
