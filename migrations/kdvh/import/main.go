@@ -51,14 +51,14 @@ func (config *Config) Execute() {
 	defer pool.Close()
 
 	if config.Reindex {
-		dropIndices(pool)
+		utils.DropIndices(pool)
 	}
 
 	// Recreate indices even in case the main function panics
 	defer func() {
 		r := recover()
 		if config.Reindex {
-			createIndices(pool)
+			utils.CreateIndices(pool)
 		}
 
 		if r != nil {
@@ -84,35 +84,4 @@ func (config *Config) Execute() {
 
 	log.SetOutput(os.Stdout)
 	slog.Info("Import complete!")
-}
-
-func dropIndices(pool *pgxpool.Pool) {
-	slog.Info("Dropping table indices...")
-
-	file, err := os.ReadFile("../db/drop_indices.sql")
-	if err != nil {
-		panic(err.Error())
-	}
-
-	_, err = pool.Exec(context.Background(), string(file))
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func createIndices(pool *pgxpool.Pool) {
-	slog.Info("Recreating table indices...")
-
-	files := []string{"../db/public.sql", "../db/flags.sql"}
-	for _, filename := range files {
-		file, err := os.ReadFile(filename)
-		if err != nil {
-			panic(err.Error())
-		}
-
-		_, err = pool.Exec(context.Background(), string(file))
-		if err != nil {
-			panic(err.Error())
-		}
-	}
 }
