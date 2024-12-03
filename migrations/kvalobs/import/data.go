@@ -80,7 +80,7 @@ func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 		lardObs := lard.DataObs{
 			Id:      tsid,
 			Obstime: obstime,
-			Data:    correctedPtr,
+			Data:    originalPtr,
 		}
 
 		var cfailed *string
@@ -88,11 +88,11 @@ func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 			cfailed = &fields[6]
 		}
 
-		// Original value is saved in flag table
 		flag := lard.Flag{
 			Id:          tsid,
 			Obstime:     obstime,
 			Original:    originalPtr,
+			Corrected:   correctedPtr,
 			Controlinfo: &fields[4], // Never null
 			Useinfo:     &fields[5], // Never null
 			Cfailed:     cfailed,

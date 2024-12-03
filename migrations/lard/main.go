@@ -32,14 +32,16 @@ func (o *TextObs) ToRow() []any {
 	return []any{o.Id, o.Obstime, o.Text}
 }
 
-// Struct mimicking the `flags.old_databases` table
+// Struct mimicking the `flags.kvdata` table
 type Flag struct {
 	// Timeseries ID
 	Id int32
 	// Time of observation
 	Obstime time.Time
-	// Original value after QC tests
+	// Original value before QC tests
 	Original *float32
+	// Corrected value after QC tests
+	Corrected *float32
 	// Flag encoding quality control status
 	Controlinfo *string
 	// Flag encoding quality control status
@@ -50,5 +52,5 @@ type Flag struct {
 
 func (o *Flag) ToRow() []any {
 	// "timeseries", "obstime", "corrected","controlinfo", "useinfo", "cfailed"
-	return []any{o.Id, o.Obstime, o.Original, o.Controlinfo, o.Useinfo, o.Cfailed}
+	return []any{o.Id, o.Obstime, o.Original, o.Corrected, o.Controlinfo, o.Useinfo, o.Cfailed}
 }

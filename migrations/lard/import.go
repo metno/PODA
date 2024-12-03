@@ -55,8 +55,8 @@ func InsertFlags(ts [][]any, pool *pgxpool.Pool, logStr string) error {
 	size := len(ts)
 	count, err := pool.CopyFrom(
 		context.TODO(),
-		pgx.Identifier{"flags", "old_databases"},
-		[]string{"timeseries", "obstime", "corrected", "controlinfo", "useinfo", "cfailed"},
+		pgx.Identifier{"flags", "kvdata"},
+		[]string{"timeseries", "obstime", "original", "corrected", "controlinfo", "useinfo", "cfailed"},
 		pgx.CopyFromRows(ts),
 	)
 	if err != nil {

@@ -92,8 +92,10 @@ func Convert(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 		lard.Flag{
 			Id:          obs.Id,
 			Obstime:     obs.obstime,
-			Useinfo:     obs.Useinfo(),
+			Original:    valPtr,
+			Corrected:   valPtr,
 			Controlinfo: &controlinfo,
+			Useinfo:     obs.Useinfo(),
 		}, nil
 }
 
@@ -141,8 +143,10 @@ func ConvertEdata(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 		lard.Flag{
 			Id:          obs.Id,
 			Obstime:     obs.obstime,
-			Useinfo:     obs.Useinfo(),
+			Original:    valPtr,
+			Corrected:   valPtr,
 			Controlinfo: &controlinfo,
+			Useinfo:     obs.Useinfo(),
 		}, nil
 }
 
@@ -190,8 +194,10 @@ func ConvertPdata(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 		lard.Flag{
 			Id:          obs.Id,
 			Obstime:     obs.obstime,
-			Useinfo:     obs.Useinfo(),
+			Original:    valPtr,
+			Corrected:   valPtr,
 			Controlinfo: &controlinfo,
+			Useinfo:     obs.Useinfo(),
 		}, nil
 }
 
@@ -241,8 +247,10 @@ func ConvertNdata(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 		lard.Flag{
 			Id:          obs.Id,
 			Obstime:     obs.obstime,
-			Useinfo:     obs.Useinfo(),
+			Original:    valPtr,
+			Corrected:   valPtr,
 			Controlinfo: &controlinfo,
+			Useinfo:     obs.Useinfo(),
 		}, nil
 }
 
@@ -295,6 +303,8 @@ func ConvertVdata(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.Flag, error) {
 		lard.Flag{
 			Id:          obs.Id,
 			Obstime:     obs.obstime,
+			Original:    valPtr,
+			Corrected:   valPtr,
 			Useinfo:     &useinfo,
 			Controlinfo: &controlinfo,
 		}, nil
@@ -305,11 +315,11 @@ func ConvertDiurnalInterpolated(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.F
 	if err != nil {
 		return lard.DataObs{}, lard.TextObs{}, lard.Flag{}, err
 	}
-
+	valPtr := addr(float32(val))
 	return lard.DataObs{
 			Id:      obs.Id,
 			Obstime: obs.obstime,
-			Data:    addr(float32(val)),
+			Data:    valPtr,
 		},
 		lard.TextObs{
 			Id:      obs.Id,
@@ -319,6 +329,8 @@ func ConvertDiurnalInterpolated(obs KdvhObs) (lard.DataObs, lard.TextObs, lard.F
 		lard.Flag{
 			Id:          obs.Id,
 			Obstime:     obs.obstime,
+			Original:    valPtr,
+			Corrected:   valPtr,
 			Useinfo:     addr(DIURNAL_INTERPOLATED_USEINFO),
 			Controlinfo: addr(VALUE_MANUALLY_INTERPOLATED),
 		}, nil
