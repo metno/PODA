@@ -38,7 +38,7 @@ func dumpTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, 
 
 	slog.Info("Collecting text labels...")
 	labels := make([]*db.Label, 0, rows.CommandTag().RowsAffected())
-	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByPos[db.Label])
+	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByName[db.Label])
 	if err != nil {
 		slog.Error(err.Error())
 		return nil, err

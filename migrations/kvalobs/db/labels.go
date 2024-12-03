@@ -3,19 +3,23 @@ package db
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"migrate/utils"
+	"os"
 	"strconv"
 	"strings"
+
+	"github.com/gocarina/gocsv"
 )
 
 // Kvalobs specific label
 type Label struct {
-	StationID int32
-	ParamID   int32
-	TypeID    int32
+	StationID int32 `db:"stationid"`
+	ParamID   int32 `db:"paramid"`
+	TypeID    int32 `db:"typeid"`
 	// These two are not present in the `text_data` tabl
-	Sensor *int32 // bpchar(1) in `data` table
-	Level  *int32
+	Sensor *int32 `db:"sensor"` // bpchar(1) in `data` table
+	Level  *int32 `db:"level"`
 }
 
 func (l *Label) sensorLevelString() (string, string) {
@@ -31,7 +35,7 @@ func (l *Label) sensorLevelString() (string, string) {
 
 func (l *Label) ToFilename() string {
 	sensor, level := l.sensorLevelString()
-	return fmt.Sprintf("%v_%v_%v_%v_%v.csv", l.StationID, l.ParamID, l.ParamID, sensor, level)
+	return fmt.Sprintf("%v_%v_%v_%v_%v.csv", l.StationID, l.ParamID, l.TypeID, sensor, level)
 }
 
 func (l *Label) LogStr() string {
@@ -40,6 +44,37 @@ func (l *Label) LogStr() string {
 		"[%v - %v - %v - %v - %v]: ",
 		l.StationID, l.ParamID, l.TypeID, sensor, level,
 	)
+}
+
+func ReadLabelCSV(path string) (labels []*Label, err error) {
+	file, err := os.Open(path)
+	if err != nil {
+		slog.Error(err.Error())
+		return nil, err
+	}
+	defer file.Close()
+
+	slog.Info("Reading previously dumped labels from " + path)
+	err = gocsv.Unmarshal(file, &labels)
+	if err != nil {
+		slog.Error(err.Error())
+	}
+	return labels, err
+}
+
+func WriteLabelCSV(path string, labels []*Label) error {
+	file, err := os.Create(path)
+	if err != nil {
+		slog.Error(err.Error())
+		return err
+	}
+
+	slog.Info("Writing timeseries labels to " + path)
+	err = gocsv.Marshal(labels, file)
+	if err != nil {
+		slog.Error(err.Error())
+	}
+	return err
 }
 
 func parseFilenameFields(s *string) (*int32, error) {
