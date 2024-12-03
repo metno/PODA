@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/schollz/progressbar/v3"
 )
@@ -69,7 +70,7 @@ func SaveToFile(values []string, filename string) error {
 }
 
 func SetLogFile(table, procedure string) {
-	filename := fmt.Sprintf("%s_%s_log.txt", table, procedure)
+	filename := fmt.Sprintf("%s_%s_%s.log", table, procedure, time.Now().Format(time.RFC3339))
 	fh, err := os.Create(filename)
 	if err != nil {
 		slog.Error(fmt.Sprintf("Could not create log %q: %s", filename, err))
