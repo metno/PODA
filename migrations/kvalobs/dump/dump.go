@@ -81,12 +81,8 @@ func getLabels[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 func getStationLabelMap(labels []*db.Label) map[int32][]*db.Label {
 	labelmap := make(map[int32][]*db.Label)
 
-	var station int32
 	for _, label := range labels {
-		if station != label.StationID {
-			station = label.StationID
-		}
-		labelmap[station] = append(labelmap[station], label)
+		labelmap[label.StationID] = append(labelmap[label.StationID], label)
 	}
 
 	return labelmap
