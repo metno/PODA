@@ -17,7 +17,7 @@ type PgConnectionPool = bb8::Pool<PostgresConnectionManager<NoTls>>;
 
 #[derive(Debug)]
 pub struct Connector {
-    pool: PgConnectionPool,
+    pub pool: PgConnectionPool,
 }
 
 #[derive(Debug, FromSql)]

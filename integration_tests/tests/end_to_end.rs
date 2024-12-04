@@ -7,7 +7,9 @@ use std::{
 
 use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Duration, DurationRound, TimeDelta, TimeZone, Utc};
+use chronoutil::RelativeDuration;
 use futures::{Future, FutureExt};
+use rove::data_switch::{DataConnector, SpaceSpec, TimeSpec, Timestamp};
 use test_case::test_case;
 use tokio::sync::mpsc;
 use tokio_postgres::NoTls;
@@ -529,6 +531,75 @@ async fn test_kafka() {
             .query_one("SELECT * FROM flags.kvdata", &[])
             .await
             .is_ok());
+    })
+    .await
+}
+
+#[test_case(
+    TestData {
+        station_id: 20001,
+        params: &[Param::new("TA"), Param::new("TGX")],
+        start_time: Utc::now().duration_trunc(TimeDelta::hours(1)).unwrap()
+            - Duration::hours(11),
+        period: Duration::hours(1),
+        type_id: 501,
+        len: 12,
+    }; "Scalar params")
+]
+#[tokio::test]
+async fn test_rove_connector(ts: TestData<'_>) {
+    e2e_test_wrapper(async {
+        let client = reqwest::Client::new();
+
+        let manager =
+            PostgresConnectionManager::new_from_stringlike(CONNECT_STRING, NoTls).unwrap();
+        let pool = bb8::Pool::builder().build(manager).await.unwrap();
+        let connector = rove_connector::Connector { pool };
+
+        let ingestor_resp = ingest_data(&client, ts.obsinn_message()).await;
+        assert_eq!(ingestor_resp.res, 0);
+
+        let resolution = "PT1H";
+        for param in ts.params {
+            let url = format!(
+                "http://localhost:3000/stations/{}/params/{}?time_resolution={}",
+                ts.station_id, param.id, resolution
+            );
+            let resp = reqwest::get(url).await.unwrap();
+
+            let json: TimeseriesResp = resp.json().await.unwrap();
+
+            let Timeseries::Regular(series) = &json.tseries[0] else {
+                panic!("Expected regular timeseries")
+            };
+
+            let ts_id = series.header.ts_id.to_string();
+
+            let data_cache = connector
+                .fetch_data(
+                    &SpaceSpec::One(ts_id.clone()),
+                    &TimeSpec::new(
+                        Timestamp(ts.start_time.timestamp()),
+                        Timestamp((ts.start_time + Duration::hours(2)).timestamp()),
+                        RelativeDuration::hours(1),
+                    ),
+                    1,
+                    1,
+                    None,
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(data_cache.num_leading_points, 1);
+            assert_eq!(data_cache.num_leading_points, 1);
+            assert_eq!(
+                data_cache.data,
+                vec![rove::data_switch::Timeseries {
+                    tag: ts_id,
+                    values: vec![None, Some(0.), Some(0.), Some(0.), Some(0.)]
+                }],
+            );
+        }
     })
     .await
 }

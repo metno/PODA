@@ -25,7 +25,7 @@ pub struct TimeseriesIrregular {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TimeseriesRegular {
     pub data: Vec<Option<f32>>,
-    header: TimeseriesInfo,
+    pub header: TimeseriesInfo,
     start_time: DateTime<Utc>,
     time_resolution: String,
 }
