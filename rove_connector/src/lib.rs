@@ -11,6 +11,8 @@ use tokio_postgres::{types::FromSql, NoTls};
 pub enum Error {
     #[error("the connector does not know how to handle this time resolution: {0:?}")]
     UnhandledTimeResolution(RelativeDuration),
+    #[error("could not parse param_id as i32")]
+    InvalidParamId,
 }
 
 type PgConnectionPool = bb8::Pool<PostgresConnectionManager<NoTls>>;
@@ -164,6 +166,7 @@ impl Connector {
 
     async fn fetch_all(
         &self,
+        param_id: i32,
         time_spec: &TimeSpec,
         num_leading_points: u8,
         num_trailing_points: u8,
@@ -189,8 +192,11 @@ impl Connector {
                 ) as data \
                 JOIN timeseries \
                     ON data.timeseries = timeseries.id \
+                JOIN labels.met \
+                    ON met.timeseries = timeseries.id \
+                WHERE met.param_id == $3
                 ",
-                &[&start_time, &end_time],
+                &[&start_time, &end_time, &param_id],
             )
             .await
             .map_err(|e| data_switch::Error::Other(Box::new(e)))?;
@@ -263,7 +269,7 @@ impl DataConnector for Connector {
         time_spec: &TimeSpec,
         num_leading_points: u8,
         num_trailing_points: u8,
-        _extra_spec: Option<&str>,
+        extra_spec: Option<&str>,
     ) -> Result<DataCache, data_switch::Error> {
         match space_spec {
             SpaceSpec::One(ts_id) => {
@@ -279,7 +285,24 @@ impl DataConnector for Connector {
             }
             SpaceSpec::Polygon(_) => unimplemented!(),
             SpaceSpec::All => {
-                self.fetch_all(time_spec, num_leading_points, num_trailing_points)
+                // TODO: this should probably be in SpaceSpec not ExtraSpec
+                let param_id = match extra_spec {
+                    Some(param_id_string) => param_id_string.parse().map_err(|_| {
+                        data_switch::Error::InvalidExtraSpec {
+                            data_source: "rove",
+                            extra_spec: extra_spec.map(String::from),
+                            source: Box::new(Error::InvalidParamId),
+                        }
+                    })?,
+                    None => {
+                        return Err(data_switch::Error::InvalidExtraSpec {
+                            data_source: "rove",
+                            extra_spec: extra_spec.map(String::from),
+                            source: Box::new(Error::InvalidParamId),
+                        })
+                    }
+                };
+                self.fetch_all(param_id, time_spec, num_leading_points, num_trailing_points)
                     .await
             }
         }
