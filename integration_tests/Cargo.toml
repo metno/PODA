@@ -10,10 +10,13 @@ debug = []
 lard_api = { path = "../api" }
 lard_ingestion = { path = "../ingestion", features = ["integration_tests", "kafka"] }
 chrono.workspace = true
+chronoutil.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true
 bb8.workspace = true
 bb8-postgres.workspace = true 
+rove.workspace = true
+rove_connector = { path = "../rove_connector" }
 serde.workspace = true
 test-case.workspace = true
 futures.workspace = true
