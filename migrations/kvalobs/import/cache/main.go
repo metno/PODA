@@ -10,19 +10,26 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"migrate/kvalobs/db"
-	"migrate/lard"
+	"migrate/stinfosys"
 	"migrate/utils"
 )
 
-type KvalobsTimespan = map[MetaKey]utils.TimeSpan
+type KvalobsTimespanMap = map[MetaKey]utils.TimeSpan
 
 type Cache struct {
-	Meta    KvalobsTimespan
-	Permits lard.PermitMaps
+	Meta    KvalobsTimespanMap
+	Permits stinfosys.PermitMaps
+	// Params  stinfosys.ScalarMap // Don't need them
 }
 
 func New(kvalobs db.DB) *Cache {
-	permits := lard.NewPermitTables()
+	conn, ctx := stinfosys.Connect()
+	defer conn.Close(ctx)
+
+	permits := stinfosys.NewPermitTables(conn)
+	// params := stinfosys.GetParamScalarMap(conn)
+	// timeseries :=
+
 	timespans := cacheKvalobsTimeseriesTimespans(kvalobs)
 	return &Cache{Permits: permits, Meta: timespans}
 }
@@ -60,8 +67,8 @@ type MetaKey struct {
 }
 
 // Query kvalobs `station_metadata` table that stores timeseries timespans
-func cacheKvalobsTimeseriesTimespans(kvalobs db.DB) KvalobsTimespan {
-	cache := make(KvalobsTimespan)
+func cacheKvalobsTimeseriesTimespans(kvalobs db.DB) KvalobsTimespanMap {
+	cache := make(KvalobsTimespanMap)
 
 	slog.Info("Connecting to Kvalobs to cache metadata")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

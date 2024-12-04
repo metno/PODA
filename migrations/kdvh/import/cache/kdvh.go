@@ -10,7 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"migrate/kdvh/db"
+	kdvh "migrate/kdvh/db"
+	"migrate/stinfosys"
 	"migrate/utils"
 )
 
@@ -19,30 +20,30 @@ type KDVHMap = map[KDVHKey]utils.TimeSpan
 
 // Used for lookup of fromtime and totime from KDVH
 type KDVHKey struct {
-	Inner   StinfoKey
+	Inner   stinfosys.Key
 	Station int32
 }
 
 func newKDVHKey(elem, table string, stnr int32) KDVHKey {
-	return KDVHKey{StinfoKey{ElemCode: elem, TableName: table}, stnr}
+	return KDVHKey{stinfosys.Key{ElemCode: elem, TableName: table}, stnr}
 }
 
 // Cache timeseries timespan from KDVH
-func cacheKDVH(tables, stations, elements []string, kdvh *db.KDVH) KDVHMap {
+func cacheKDVH(tables, stations, elements []string, database *kdvh.KDVH) KDVHMap {
 	cache := make(KDVHMap)
 
 	slog.Info("Connecting to KDVH proxy to cache metadata")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := pgx.Connect(ctx, os.Getenv(db.KDVH_ENV_VAR))
+	conn, err := pgx.Connect(ctx, os.Getenv(kdvh.KDVH_ENV_VAR))
 	if err != nil {
 		slog.Error("Could not connect to KDVH proxy. Make sure to be connected to the VPN: " + err.Error())
 		os.Exit(1)
 	}
 	defer conn.Close(context.TODO())
 
-	for _, t := range kdvh.Tables {
+	for _, t := range database.Tables {
 		if len(tables) > 0 && !slices.Contains(tables, t.TableName) {
 			continue
 		}

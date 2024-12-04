@@ -28,6 +28,8 @@ import (
 //     useinfo     | character(16)               |           |          | '0000000000000000'::bpchar
 //     cfailed     | text                        |           |          |
 //
+// - `data_history`: stores observations similar to `data`, but not sure what history refers to
+//
 // - `default_missing`:
 // - `default_missing_values`: default values for some paramids (-32767)
 // - `model`: stores model names
@@ -89,7 +91,9 @@ import (
 //     tbtime    | timestamp without time zone |           | not null |
 //     typeid    | integer                     |           | not null |
 //
-// NOTE: In `histkvalobs` only `data` and `text_data` are non-empty.
+// - `text_data_history`: stores observations similar to `text_data`, but not sure what history refers to
+//
+// NOTE: In `histkvalobs` only `data`, `data_history`, `text_data`, and `text_data_history` are non-empty.
 //
 // IMPORTANT: considerations for migrations to LARD
 //     - LARD stores Timeseries labels (stationid, paramid, typeid, sensor, level) in a separate table
@@ -128,11 +132,14 @@ type TextObs struct {
 	Tbtime   time.Time `db:"tbtime"`
 }
 
+// Basic Metadata for a Kvalobs database
 type DB struct {
 	Name       string
+	Path       string
 	ConnEnvVar string
 }
 
+// Returns two `DB` structs with metadata for the prod and hist databases
 func InitDBs() (DB, DB) {
 	kvalobs := DB{Name: "kvalobs", ConnEnvVar: "KVALOBS_CONN_STRING"}
 	histkvalobs := DB{Name: "histkvalobs", ConnEnvVar: "HISTKVALOBS_CONN_STRING"}

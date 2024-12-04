@@ -18,6 +18,7 @@ type Config struct {
 
 func (config *Config) Execute() {
 	kvalobs, histkvalobs := db.InitDBs()
+	// tables := []*db.Table{}
 
 	if utils.IsEmptyOrEqual(config.Database, kvalobs.Name) {
 		dumpDB(kvalobs, config)

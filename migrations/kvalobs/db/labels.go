@@ -4,13 +4,18 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"migrate/lard"
 	"migrate/utils"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/gocarina/gocsv"
 )
+
+var METAR_CLOUD_TYPES []int32 = []int32{2751, 2752, 2753, 2754}
+var SPECIAL_CLOUD_TYPES []int32 = []int32{305, 306, 307, 308}
 
 // Kvalobs specific label
 type Label struct {
@@ -20,6 +25,15 @@ type Label struct {
 	// These two are not present in the `text_data` tabl
 	Sensor *int32 `db:"sensor"` // bpchar(1) in `data` table
 	Level  *int32 `db:"level"`
+	// LogStr string
+}
+
+func (l *Label) IsMetarCloudType() bool {
+	return slices.Contains(METAR_CLOUD_TYPES, l.ParamID)
+}
+
+func (l *Label) IsSpecialCloudType() bool {
+	return slices.Contains(SPECIAL_CLOUD_TYPES, l.ParamID)
 }
 
 func (l *Label) sensorLevelString() (string, string) {
@@ -44,6 +58,11 @@ func (l *Label) LogStr() string {
 		"[%v - %v - %v - %v - %v]: ",
 		l.StationID, l.ParamID, l.TypeID, sensor, level,
 	)
+}
+
+func (l *Label) ToLard() *lard.Label {
+	label := lard.Label(*l)
+	return &label
 }
 
 func ReadLabelCSV(path string) (labels []*Label, err error) {
@@ -94,8 +113,8 @@ func LabelFromFilename(filename string) (*Label, error) {
 	name := strings.TrimSuffix(filename, ".csv")
 
 	fields := strings.Split(name, "_")
-	if len(fields) < 5 {
-		return nil, errors.New("Too few fields in file name: " + filename)
+	if len(fields) != 5 {
+		return nil, errors.New("Wrong number of fields in file name: " + filename)
 	}
 
 	ptrs := make([]*string, len(fields))

@@ -10,7 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"migrate/kdvh/db"
+	kdvh "migrate/kdvh/db"
 	"migrate/kdvh/import/cache"
 	"migrate/lard"
 	"migrate/utils"
@@ -37,10 +37,10 @@ func (config *Config) Execute() {
 	}
 
 	slog.Info("Import started!")
-	kdvh := db.Init()
+	database := kdvh.Init()
 
 	// Cache metadata from Stinfosys, KDVH, and local `product_offsets.csv`
-	cache := cache.CacheMetadata(config.Tables, config.Stations, config.Elements, kdvh)
+	cache := cache.CacheMetadata(config.Tables, config.Stations, config.Elements, database)
 
 	// Create connection pool for LARD
 	pool, err := pgxpool.New(context.TODO(), os.Getenv(lard.LARD_ENV_VAR))
@@ -66,7 +66,7 @@ func (config *Config) Execute() {
 		}
 	}()
 
-	for _, table := range kdvh.Tables {
+	for _, table := range database.Tables {
 		if len(config.Tables) > 0 && !slices.Contains(config.Tables, table.TableName) {
 			continue
 		}

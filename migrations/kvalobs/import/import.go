@@ -11,13 +11,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"migrate/kvalobs/db"
+	kvalobs "migrate/kvalobs/db"
 	"migrate/kvalobs/import/cache"
 	"migrate/lard"
 	"migrate/utils"
 )
 
-func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cache.Cache, pool *pgxpool.Pool, config *Config) (int64, error) {
+func ImportTable(table kvalobs.Table, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (int64, error) {
 	fmt.Printf("Importing from %q...\n", table.Path)
 	defer fmt.Println(strings.Repeat("- ", 40))
 
@@ -53,7 +53,7 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cach
 					wg.Done()
 				}()
 
-				label, err := db.LabelFromFilename(file.Name())
+				label, err := kvalobs.LabelFromFilename(file.Name())
 				if err != nil {
 					slog.Error(err.Error())
 					return
@@ -63,43 +63,32 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cach
 					return
 				}
 
-				labelStr := label.LogStr()
-
+				logStr := label.LogStr()
 				// Check if data for this station/element is restricted
 				if !cache.TimeseriesIsOpen(label.StationID, label.TypeID, label.ParamID) {
 					// TODO: eventually use this to choose which table to use on insert
-					slog.Warn(labelStr + "timeseries data is restricted, skipping")
+					slog.Warn(logStr + "timeseries data is restricted, skipping")
 					return
 				}
 
 				timespan, err := cache.GetSeriesTimespan(label)
 				if err != nil {
-					slog.Error(labelStr + err.Error())
+					slog.Error(logStr + err.Error())
 					return
 				}
 
-				lardLabel := lard.Label(*label)
 				// TODO: figure out where to get fromtime, kvalobs directly? Stinfosys?
-				tsid, err := lard.GetTimeseriesID(&lardLabel, timespan, pool)
+				tsid, err := lard.GetTimeseriesID(label.ToLard(), timespan, pool)
 				if err != nil {
-					slog.Error(labelStr + err.Error())
+					slog.Error(logStr + err.Error())
 					return
 				}
 
-				ts, flags, err := table.ReadCSV(tsid, filepath.Join(stationDir, file.Name()))
+				filename := filepath.Join(stationDir, file.Name())
+				count, err := table.Import(tsid, label, filename, logStr, pool)
 				if err != nil {
-					slog.Error(labelStr + err.Error())
+					// Logged inside table.Import
 					return
-				}
-
-				count, err := table.Import(ts, pool, labelStr)
-				if err != nil {
-					slog.Error(labelStr + "Failed bulk insertion - " + err.Error())
-					return
-				}
-
-				if err := lard.InsertFlags(flags, pool, labelStr); err != nil {
-					slog.Error(labelStr + "failed flag bulk insertion - " + err.Error())
 				}
 
 				rowsInserted += count
@@ -117,17 +106,17 @@ func ImportTable[S db.DataSeries | db.TextSeries](table db.Table[S], cache *cach
 
 // TODO: while importing we trust that kvalobs and stinfosys have the same
 // non scalar parameters, which might not be the case
-func ImportDB(database db.DB, cache *cache.Cache, pool *pgxpool.Pool, config *Config) {
+func ImportDB(database kvalobs.DB, cache *cache.Cache, pool *pgxpool.Pool, config *Config) {
 	path := filepath.Join(config.Path, database.Name)
 
-	if utils.IsEmptyOrEqual(config.Table, db.DATA_TABLE_NAME) {
+	if utils.IsEmptyOrEqual(config.Table, kvalobs.DATA_TABLE_NAME) {
 		table := DataTable(path)
 		utils.SetLogFile(table.Path, "import")
 
 		ImportTable(table, cache, pool, config)
 	}
 
-	if utils.IsEmptyOrEqual(config.Table, db.TEXT_TABLE_NAME) {
+	if utils.IsEmptyOrEqual(config.Table, kvalobs.TEXT_TABLE_NAME) {
 		table := TextTable(path)
 		utils.SetLogFile(table.Path, "import")
 

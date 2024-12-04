@@ -9,20 +9,20 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"migrate/kvalobs/db"
+	kvalobs "migrate/kvalobs/db"
 	"migrate/utils"
 )
 
 // Returns a DataTable for dump
-func DataTable(path string) db.DataTable {
-	return db.DataTable{
-		Path:       filepath.Join(path, db.DATA_TABLE_NAME),
+func DataTable(path string) kvalobs.Table {
+	return kvalobs.Table{
+		Path:       filepath.Join(path, kvalobs.DATA_TABLE_NAME),
 		DumpLabels: dumpDataLabels,
 		DumpSeries: dumpDataSeries,
 	}
 }
 
-func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, error) {
+func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*kvalobs.Label, error) {
 	query := `SELECT DISTINCT stationid, typeid, paramid, sensor::int, level 
                 FROM data
                 WHERE ($1::timestamp IS NULL OR obstime >= $1) 
@@ -37,8 +37,8 @@ func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, 
 	}
 
 	slog.Info("Collecting data labels...")
-	labels := make([]*db.Label, 0, rows.CommandTag().RowsAffected())
-	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByName[db.Label])
+	labels := make([]*kvalobs.Label, 0, rows.CommandTag().RowsAffected())
+	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByName[kvalobs.Label])
 	if err != nil {
 		slog.Error(err.Error())
 		return nil, err
@@ -47,7 +47,7 @@ func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, 
 	return labels, nil
 }
 
-func dumpDataSeries(label *db.Label, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.DataSeries, error) {
+func dumpDataSeries(label *kvalobs.Label, timespan *utils.TimeSpan, path string, pool *pgxpool.Pool) error {
 	// NOTE: sensor and level could be NULL, but in reality they have default values
 	query := `SELECT obstime, original, tbtime, corrected, controlinfo, useinfo, cfailed
                 FROM data
@@ -79,15 +79,13 @@ func dumpDataSeries(label *db.Label, timespan *utils.TimeSpan, pool *pgxpool.Poo
 		timespan.To,
 	)
 	if err != nil {
-		slog.Error(err.Error())
-		return nil, err
+		return err
 	}
 
-	data, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[db.DataObs])
+	data, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[kvalobs.DataObs])
 	if err != nil {
-		slog.Error(err.Error())
-		return nil, err
+		return err
 	}
 
-	return data, nil
+	return writeSeriesCSV(data, path, label)
 }
