@@ -12,7 +12,7 @@ import (
 	"migrate/kdvh/db"
 	port "migrate/kdvh/import"
 	"migrate/kdvh/import/cache"
-	"migrate/lard"
+	"migrate/stinfosys"
 )
 
 type KdvhTestCase struct {
@@ -33,14 +33,14 @@ func (t *KdvhTestCase) mockConfig() (*port.Config, *cache.Cache) {
 			Sep:       ";",
 		},
 		&cache.Cache{
-			Stinfo: cache.StinfoMap{
+			Elements: stinfosys.ElemMap{
 				{ElemCode: t.elem, TableName: t.table}: {
 					Fromtime: time.Date(2001, 7, 1, 9, 0, 0, 0, time.UTC),
 					IsScalar: true,
 				},
 			},
-			Permits: lard.PermitMaps{
-				StationPermits: lard.StationPermitMap{
+			Permits: stinfosys.PermitMaps{
+				StationPermits: stinfosys.StationPermitMap{
 					t.station: t.permit,
 				},
 			},

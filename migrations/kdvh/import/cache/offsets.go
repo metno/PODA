@@ -2,6 +2,7 @@ package cache
 
 import (
 	"log/slog"
+	"migrate/stinfosys"
 	"os"
 
 	"github.com/gocarina/gocsv"
@@ -9,7 +10,7 @@ import (
 )
 
 // Map of offsets used to correct KDVH times for specific parameters
-type OffsetMap = map[StinfoKey]period.Period
+type OffsetMap = map[stinfosys.Key]period.Period
 
 // Caches how to modify the obstime (in KDVH) for certain paramids
 func cacheParamOffsets() OffsetMap {
@@ -58,7 +59,7 @@ func cacheParamOffsets() OffsetMap {
 			os.Exit(1)
 		}
 
-		cache[StinfoKey{ElemCode: row.ElemCode, TableName: row.TableName}] = migrationOffset
+		cache[stinfosys.Key{ElemCode: row.ElemCode, TableName: row.TableName}] = migrationOffset
 	}
 
 	return cache

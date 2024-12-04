@@ -13,8 +13,8 @@ import (
 )
 
 // Returns a TextTable for dump
-func TextTable(path string) db.TextTable {
-	return db.TextTable{
+func TextTable(path string) db.Table {
+	return db.Table{
 		Path:       filepath.Join(path, db.TEXT_TABLE_NAME),
 		DumpLabels: dumpTextLabels,
 		DumpSeries: dumpTextSeries,
@@ -47,7 +47,7 @@ func dumpTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*db.Label, 
 	return labels, nil
 }
 
-func dumpTextSeries(label *db.Label, timespan *utils.TimeSpan, pool *pgxpool.Pool) (db.TextSeries, error) {
+func dumpTextSeries(label *db.Label, timespan *utils.TimeSpan, path string, pool *pgxpool.Pool) error {
 	query := `SELECT obstime, original, tbtime FROM text_data
                 WHERE stationid = $1
                   AND typeid = $2
@@ -66,15 +66,13 @@ func dumpTextSeries(label *db.Label, timespan *utils.TimeSpan, pool *pgxpool.Poo
 		timespan.To,
 	)
 	if err != nil {
-		slog.Error(err.Error())
-		return nil, err
+		return err
 	}
 
 	data, err := pgx.CollectRows(rows, pgx.RowToAddrOfStructByName[db.TextObs])
 	if err != nil {
-		slog.Error(err.Error())
-		return nil, err
+		return err
 	}
 
-	return data, nil
+	return writeSeriesCSV(data, path, label)
 }

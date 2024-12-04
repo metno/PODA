@@ -8,46 +8,49 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rickb777/period"
 
-	"migrate/kdvh/db"
+	kdvh "migrate/kdvh/db"
 	"migrate/lard"
+	"migrate/stinfosys"
 	"migrate/utils"
 )
 
 type Cache struct {
-	Offsets OffsetMap
-	Stinfo  StinfoMap
-	KDVH    KDVHMap
-	Permits lard.PermitMaps
+	Offsets   OffsetMap
+	Timespans KDVHMap
+	Elements  stinfosys.ElemMap
+	Permits   stinfosys.PermitMaps
 }
 
 // Caches all the metadata needed for import of KDVH tables.
 // If any error occurs inside here the program will exit.
-func CacheMetadata(tables, stations, elements []string, kdvh *db.KDVH) *Cache {
+func CacheMetadata(tables, stations, elements []string, database *kdvh.KDVH) *Cache {
+	stconn, ctx := stinfosys.Connect()
+	defer stconn.Close(ctx)
+
 	return &Cache{
-		Stinfo:  cacheStinfoMeta(tables, elements, kdvh),
-		Permits: lard.NewPermitTables(),
-		Offsets: cacheParamOffsets(),
-		KDVH:    cacheKDVH(tables, stations, elements, kdvh),
+		Elements:  stinfosys.CacheElemMap(stconn),
+		Permits:   stinfosys.NewPermitTables(stconn),
+		Offsets:   cacheParamOffsets(),
+		Timespans: cacheKDVH(tables, stations, elements, database),
 	}
 }
 
 // Convenience struct that holds information for a specific timeseries
 type TsInfo struct {
-	Id      int32
-	Station int32
-	Element string
-	Offset  period.Period
-	Param   StinfoParam
-	Span    utils.TimeSpan
-	Logstr  string
-	IsOpen  bool
+	Id       int32
+	Station  int32
+	Element  string
+	Offset   period.Period
+	Param    stinfosys.Param
+	Timespan utils.TimeSpan
+	Logstr   string
 }
 
 func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpool.Pool) (*TsInfo, error) {
 	logstr := fmt.Sprintf("[%v - %v - %v]: ", table, station, element)
 	key := newKDVHKey(element, table, station)
 
-	param, ok := cache.Stinfo[key.Inner]
+	param, ok := cache.Elements[key.Inner]
 	if !ok {
 		// TODO: should it fail here? How do we deal with data without metadata?
 		slog.Error(logstr + "Missing metadata in Stinfosys")
@@ -66,7 +69,7 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 	offset := cache.Offsets[key.Inner]
 
 	// No need to check for `!ok`, timespan will be ignored if not in the map
-	span, ok := cache.KDVH[key]
+	timespan, ok := cache.Timespans[key]
 
 	label := lard.Label{
 		StationID: station,
@@ -77,21 +80,19 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 	}
 
 	// TODO: are Param.Fromtime and Span.From different?
-	timespan := utils.TimeSpan{From: &param.Fromtime, To: span.To}
-	tsid, err := lard.GetTimeseriesID(&label, timespan, pool)
+	tsid, err := lard.GetTimeseriesID(&label, utils.TimeSpan{From: &param.Fromtime, To: timespan.To}, pool)
 	if err != nil {
 		slog.Error(logstr + "could not obtain timeseries - " + err.Error())
 		return nil, err
 	}
 
 	return &TsInfo{
-		Id:      tsid,
-		Station: station,
-		Element: element,
-		Offset:  offset,
-		Param:   param,
-		Span:    span,
-		Logstr:  logstr,
-		IsOpen:  isOpen,
+		Id:       tsid,
+		Station:  station,
+		Element:  element,
+		Offset:   offset,
+		Param:    param,
+		Timespan: timespan,
+		Logstr:   logstr,
 	}, nil
 }

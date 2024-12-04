@@ -10,45 +10,76 @@ import (
 	"strings"
 	"time"
 
-	"migrate/kvalobs/db"
+	kvalobs "migrate/kvalobs/db"
 	"migrate/lard"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Returns a DataTable for import
-func DataTable(path string) db.DataTable {
-	return db.DataTable{
-		Path:    filepath.Join(path, db.DATA_TABLE_NAME),
-		Import:  lard.InsertData,
-		ReadCSV: ReadDataCSV,
+func DataTable(path string) kvalobs.Table {
+	return kvalobs.Table{
+		Path:   filepath.Join(path, kvalobs.DATA_TABLE_NAME),
+		Import: importData,
 	}
 }
 
-func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
+func importData(tsid int32, label *kvalobs.Label, filename, logStr string, pool *pgxpool.Pool) (int64, error) {
 	file, err := os.Open(filename)
 	if err != nil {
-		slog.Error(err.Error())
-		return nil, nil, err
+		slog.Error(logStr + err.Error())
+		return 0, err
 	}
 	defer file.Close()
 
-	reader := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(file)
 
 	// Parse number of rows
-	reader.Scan()
-	rowCount, _ := strconv.Atoi(reader.Text())
+	scanner.Scan()
+	rowCount, _ := strconv.Atoi(scanner.Text())
 
 	// Skip header
-	reader.Scan()
+	scanner.Scan()
 
-	var originalPtr, correctedPtr *float32
+	if label.IsSpecialCloudType() {
+		text, err := parseSpecialCloudType(tsid, rowCount, scanner)
+		if err != nil {
+			slog.Error(logStr + err.Error())
+			return 0, err
+		}
 
-	// Parse observations
+		count, err := lard.InsertTextData(text, pool, logStr)
+		if err != nil {
+			slog.Error(logStr + err.Error())
+			return 0, err
+		}
+
+		return count, nil
+	}
+
+	data, flags, err := parseDataCSV(tsid, rowCount, scanner)
+	count, err := lard.InsertData(data, pool, logStr)
+	if err != nil {
+		slog.Error(logStr + err.Error())
+		return 0, err
+	}
+
+	if err := lard.InsertFlags(flags, pool, logStr); err != nil {
+		slog.Error(logStr + err.Error())
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func parseDataCSV(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, [][]any, error) {
 	data := make([][]any, 0, rowCount)
 	flags := make([][]any, 0, rowCount)
-	for reader.Scan() {
+	var originalPtr, correctedPtr *float32
+	for scanner.Scan() {
 		// obstime, original, tbtime, corrected, controlinfo, useinfo, cfailed
 		// We don't parse tbtime
-		fields := strings.Split(reader.Text(), ",")
+		fields := strings.Split(scanner.Text(), ",")
 
 		obstime, err := time.Parse(time.RFC3339, fields[0])
 		if err != nil {
@@ -65,18 +96,18 @@ func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 			return nil, nil, err
 		}
 
-		// Filter out special values that in Kvalobs stand for null observations
 		original := float32(obsvalue64)
-		if !slices.Contains(db.NULL_VALUES, original) {
+		corrected := float32(corrected64)
+
+		// Filter out special values that in Kvalobs stand for null observations
+		if !slices.Contains(kvalobs.NULL_VALUES, original) {
 			originalPtr = &original
 		}
-
-		corrected := float32(corrected64)
-		if !slices.Contains(db.NULL_VALUES, corrected) {
+		if !slices.Contains(kvalobs.NULL_VALUES, corrected) {
 			correctedPtr = &corrected
 		}
 
-		// Corrected value is inserted in main data table
+		// Original value is inserted in main data table
 		lardObs := lard.DataObs{
 			Id:      tsid,
 			Obstime: obstime,
@@ -93,8 +124,8 @@ func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 			Obstime:     obstime,
 			Original:    originalPtr,
 			Corrected:   correctedPtr,
-			Controlinfo: &fields[4], // Never null
-			Useinfo:     &fields[5], // Never null
+			Controlinfo: &fields[4], // Never null, has default values in KValobs
+			Useinfo:     &fields[5], // Never null, has default values in KValobs
 			Cfailed:     cfailed,
 		}
 
@@ -103,4 +134,30 @@ func ReadDataCSV(tsid int32, filename string) ([][]any, [][]any, error) {
 	}
 
 	return data, flags, nil
+}
+
+// Function for paramids 305, 306, 307, 308 that were stored as scalar data
+// but should be treated as text
+func parseSpecialCloudType(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, error) {
+	data := make([][]any, 0, rowCount)
+	for scanner.Scan() {
+		// obstime, original, tbtime, corrected, controlinfo, useinfo, cfailed
+		// TODO: should parse everything and return the flags?
+		fields := strings.Split(scanner.Text(), ",")
+
+		obstime, err := time.Parse(time.RFC3339, fields[0])
+		if err != nil {
+			return nil, err
+		}
+
+		lardObs := lard.TextObs{
+			Id:      tsid,
+			Obstime: obstime,
+			Text:    &fields[1],
+		}
+
+		data = append(data, lardObs.ToRow())
+	}
+
+	return data, nil
 }

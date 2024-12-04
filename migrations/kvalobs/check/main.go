@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"migrate/kvalobs/db"
-	"migrate/lard"
+	"migrate/stinfosys"
 	"migrate/utils"
 )
 
@@ -91,7 +91,7 @@ func getStinfoNonScalars() []int32 {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	conn, err := pgx.Connect(ctx, os.Getenv(lard.STINFO_ENV_VAR))
+	conn, err := pgx.Connect(ctx, os.Getenv(stinfosys.STINFO_ENV_VAR))
 	if err != nil {
 		log.Fatal("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
 	}
@@ -111,23 +111,28 @@ func getStinfoNonScalars() []int32 {
 // Checks that text params in Kvalobs are considered non-scalar in Stinfosys
 func (c *Config) checkNonScalars(database *db.DB, nonscalars []int32) {
 	defer fmt.Println(strings.Repeat("- ", 40))
-	path := filepath.Join(c.Path, database.Name, db.TEXT_TABLE_NAME+"_labels.csv")
-	kvParamids, err := loadParamids(path)
-	if err != nil {
+	datapath := filepath.Join(c.Path, database.Name, db.DATA_TABLE_NAME+"_labels.csv")
+	textpath := filepath.Join(c.Path, database.Name, db.TEXT_TABLE_NAME+"_labels.csv")
+
+	dataParamids, derr := loadParamids(datapath)
+	textParamids, terr := loadParamids(textpath)
+	if derr != nil || terr != nil {
 		return
 	}
 
 	for _, id := range nonscalars {
-		if _, ok := kvParamids[id]; ok {
+		if _, ok := textParamids[id]; ok {
 			fmt.Printf("MATCH: ParamID %5d is text in both Stinfosys and Kvalobs\n", id)
-			delete(kvParamids, id)
-		} else {
+			delete(textParamids, id)
+		} else if _, ok := dataParamids[id]; ok {
 			fmt.Printf(" FAIL: ParamID %5d is text in Stinfosys, but not in Kvalobs\n", id)
+		} else {
+			fmt.Printf(" WARN: ParamID %5d not found in Kvalobs\n", id)
 		}
 	}
 
-	idsLeft := make([]int32, 0, len(kvParamids))
-	for id := range kvParamids {
+	idsLeft := make([]int32, 0, len(textParamids))
+	for id := range textParamids {
 		idsLeft = append(idsLeft, id)
 	}
 

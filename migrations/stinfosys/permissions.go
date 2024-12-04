@@ -1,10 +1,9 @@
-package lard
+package stinfosys
 
 import (
 	"context"
 	"log/slog"
 	"os"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -28,18 +27,7 @@ type PermitMaps struct {
 	StationPermits StationPermitMap
 }
 
-func NewPermitTables() PermitMaps {
-	slog.Info("Connecting to Stinfosys to cache permits")
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	conn, err := pgx.Connect(ctx, os.Getenv(STINFO_ENV_VAR))
-	if err != nil {
-		slog.Error("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
-		os.Exit(1)
-	}
-	defer conn.Close(ctx)
-
+func NewPermitTables(conn *pgx.Conn) PermitMaps {
 	return PermitMaps{
 		ParamPermits:   cacheParamPermits(conn),
 		StationPermits: cacheStationPermits(conn),
@@ -110,9 +98,9 @@ func cacheStationPermits(conn *pgx.Conn) StationPermitMap {
 	return cache
 }
 
-func (c *PermitMaps) TimeseriesIsOpen(stnr, typeid, paramid int32) bool {
+func (permits *PermitMaps) TimeseriesIsOpen(stnr, typeid, paramid int32) bool {
 	// First check param permit table
-	if permits, ok := c.ParamPermits[stnr]; ok {
+	if permits, ok := permits.ParamPermits[stnr]; ok {
 		for _, permit := range permits {
 			if (permit.TypeId == 0 || permit.TypeId == typeid) &&
 				(permit.ParamdId == 0 || permit.ParamdId == paramid) {
@@ -122,7 +110,7 @@ func (c *PermitMaps) TimeseriesIsOpen(stnr, typeid, paramid int32) bool {
 	}
 
 	// Otherwise check station permit table
-	if permit, ok := c.StationPermits[stnr]; ok {
+	if permit, ok := permits.StationPermits[stnr]; ok {
 		return permit == 1
 	}
 

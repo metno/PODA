@@ -12,11 +12,11 @@ import (
 	"github.com/gocarina/gocsv"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"migrate/kvalobs/db"
+	kvalobs "migrate/kvalobs/db"
 	"migrate/utils"
 )
 
-func writeSeriesCSV[S db.DataSeries | db.TextSeries](series S, path string, label *db.Label) error {
+func writeSeriesCSV[S kvalobs.DataSeries | kvalobs.TextSeries](series S, path string, label *kvalobs.Label) error {
 	filename := filepath.Join(path, label.ToFilename())
 	file, err := os.Create(filename)
 	if err != nil {
@@ -34,7 +34,7 @@ func writeSeriesCSV[S db.DataSeries | db.TextSeries](series S, path string, labe
 	return nil
 }
 
-func getLabels[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool.Pool, config *Config) (labels []*db.Label, err error) {
+func getLabels(table kvalobs.Table, pool *pgxpool.Pool, config *Config) (labels []*kvalobs.Label, err error) {
 	labelFile := table.Path + "_labels.csv"
 
 	if _, err := os.Stat(labelFile); err != nil || config.UpdateLabels {
@@ -42,13 +42,13 @@ func getLabels[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 		if err != nil {
 			return nil, err
 		}
-		return labels, db.WriteLabelCSV(labelFile, labels)
+		return labels, kvalobs.WriteLabelCSV(labelFile, labels)
 	}
-	return db.ReadLabelCSV(labelFile)
+	return kvalobs.ReadLabelCSV(labelFile)
 }
 
-func getStationLabelMap(labels []*db.Label) map[int32][]*db.Label {
-	labelmap := make(map[int32][]*db.Label)
+func getStationLabelMap(labels []*kvalobs.Label) map[int32][]*kvalobs.Label {
+	labelmap := make(map[int32][]*kvalobs.Label)
 
 	for _, label := range labels {
 		labelmap[label.StationID] = append(labelmap[label.StationID], label)
@@ -57,7 +57,7 @@ func getStationLabelMap(labels []*db.Label) map[int32][]*db.Label {
 	return labelmap
 }
 
-func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool.Pool, config *Config) {
+func dumpTable(table kvalobs.Table, pool *pgxpool.Pool, config *Config) {
 	if !config.LabelsOnly {
 		utils.SetLogFile(table.Path, "dump")
 	}
@@ -109,23 +109,20 @@ func dumpTable[S db.DataSeries | db.TextSeries](table db.Table[S], pool *pgxpool
 					return
 				}
 
-				series, err := table.DumpSeries(label, timespan, pool)
-				if err != nil {
+				logStr := label.LogStr()
+				if err := table.DumpSeries(label, timespan, stationPath, pool); err != nil {
+					slog.Info(logStr + err.Error())
 					return
 				}
 
-				if err := writeSeriesCSV(series, stationPath, label); err != nil {
-					return
-				}
-
-				slog.Info(label.LogStr() + "dumped successfully")
+				slog.Info(logStr + "dumped successfully")
 			}()
 		}
 		wg.Wait()
 	}
 }
 
-func dumpDB(database db.DB, config *Config) {
+func dumpDB(database kvalobs.DB, config *Config) {
 	pool, err := pgxpool.New(context.Background(), os.Getenv(database.ConnEnvVar))
 	if err != nil {
 		slog.Error(fmt.Sprint("Could not connect to Kvalobs:", err))
@@ -139,12 +136,12 @@ func dumpDB(database db.DB, config *Config) {
 		return
 	}
 
-	if utils.IsEmptyOrEqual(config.Table, db.DATA_TABLE_NAME) {
+	if utils.IsEmptyOrEqual(config.Table, kvalobs.DATA_TABLE_NAME) {
 		table := DataTable(path)
 		dumpTable(table, pool, config)
 	}
 
-	if utils.IsEmptyOrEqual(config.Table, db.TEXT_TABLE_NAME) {
+	if utils.IsEmptyOrEqual(config.Table, kvalobs.TEXT_TABLE_NAME) {
 		table := TextTable(path)
 		dumpTable(table, pool, config)
 	}

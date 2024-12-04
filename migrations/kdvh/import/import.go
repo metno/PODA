@@ -15,7 +15,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"migrate/kdvh/db"
+	kdvh "migrate/kdvh/db"
 	"migrate/kdvh/import/cache"
 	"migrate/lard"
 	"migrate/utils"
@@ -24,7 +24,7 @@ import (
 // TODO: add CALL_SIGN? It's not in stinfosys?
 var INVALID_ELEMENTS = []string{"TYPEID", "TAM_NORMAL_9120", "RRA_NORMAL_9120", "OT", "OTN", "OTX", "DD06", "DD12", "DD18"}
 
-func ImportTable(table *db.Table, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (rowsInserted int64) {
+func ImportTable(table *kdvh.Table, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (rowsInserted int64) {
 	fmt.Printf("Importing %s...\n", table.TableName)
 	defer fmt.Println(strings.Repeat("- ", 40))
 
@@ -150,7 +150,7 @@ func getElementCode(element os.DirEntry, elementList []string) (string, error) {
 
 // Parses the observations in the CSV file, converts them with the table
 // ConvertFunction and returns three arrays that can be passed to pgx.CopyFromRows
-func parseData(filename string, tsInfo *cache.TsInfo, convFunc ConvertFunction, table *db.Table, config *Config) ([][]any, [][]any, [][]any, error) {
+func parseData(filename string, tsInfo *cache.TsInfo, convFunc ConvertFunction, table *kdvh.Table, config *Config) ([][]any, [][]any, [][]any, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		slog.Warn(err.Error())
@@ -180,9 +180,9 @@ func parseData(filename string, tsInfo *cache.TsInfo, convFunc ConvertFunction, 
 		}
 
 		// Only import data between KDVH's defined fromtime and totime
-		if tsInfo.Span.From != nil && obsTime.Sub(*tsInfo.Span.From) < 0 {
+		if tsInfo.Timespan.From != nil && obsTime.Sub(*tsInfo.Timespan.From) < 0 {
 			continue
-		} else if tsInfo.Span.To != nil && obsTime.Sub(*tsInfo.Span.To) > 0 {
+		} else if tsInfo.Timespan.To != nil && obsTime.Sub(*tsInfo.Timespan.To) > 0 {
 			break
 		}
 
