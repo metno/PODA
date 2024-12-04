@@ -48,7 +48,7 @@ fn extract_time_spec(
         - (time_spec.time_resolution * num_leading_points.into());
     // TODO: figure out whether the range in postgres is inclusive on the range here or
     // we need to add 1 second
-    let end_time = Utc.timestamp_opt(time_spec.timerange.start.0, 0).unwrap()
+    let end_time = Utc.timestamp_opt(time_spec.timerange.end.0, 0).unwrap()
         + (time_spec.time_resolution * num_trailing_points.into());
 
     Ok((start_time, end_time))
