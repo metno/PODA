@@ -118,7 +118,8 @@ impl Connector {
         let (start_time, end_time) =
             extract_time_spec(time_spec, num_leading_points, num_trailing_points)?;
 
-        // TODO: should this contain an ORDER BY?
+        // TODO: should this contain an ORDER BY? Actually I think it's not necessary since the
+        // order is dictated by the generated sequence
         // TODO: should we drop ts_rule.timestamp from the SELECT? we don't seem to use it
         // TODO: should we make this like the fetch_all query and regularize outside the query?
         // I think this query might perform badly because the join against the generated series
