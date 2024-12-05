@@ -1,4 +1,4 @@
-package port
+package db
 
 // In kvalobs a flag is a 16 char string containg QC information about the observation:
 // Note: Missing numbers in the following lists are marked as reserved (not in use I guess?)
