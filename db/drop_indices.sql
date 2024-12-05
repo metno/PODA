@@ -1,7 +1,11 @@
--- Remove indices before bulk insertion
-DROP INDEX IF EXISTS data_timestamp_index,
-                     data_timeseries_index,
-                     nonscalar_data_timestamp_index,
-                     nonscalar_data_timeseries_index,
-                     old_flags_obtime_index,
-                     old_flags_timeseries_index;
+DO $$
+DECLARE
+ i RECORD;
+BEGIN
+    FOR i IN (SELECT schemaname, indexname fROM pg_indexes
+                WHERE schemaname IN ('public', 'flags')
+                AND NOT indexdef LIKE '%UNIQUE%')
+    LOOP
+        EXECUTE format('DROP INDEX IF EXISTS %s.%s', i.schemaname, i.indexname);
+    END LOOP;
+END $$;
