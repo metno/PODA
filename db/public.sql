@@ -10,6 +10,16 @@ BEGIN
 END IF;
 END $$;
 
+DO $$ 
+BEGIN
+    IF (SELECT NOT EXISTS (select from pg_type where typname = 'obs')) THEN
+    CREATE TYPE obs AS (
+        obstime TIMESTAMPTZ,
+        obsvalue REAL
+    );
+END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.timeseries (
     id SERIAL PRIMARY KEY,
     fromtime TIMESTAMPTZ NULL,

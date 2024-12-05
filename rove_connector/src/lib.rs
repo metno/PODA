@@ -23,9 +23,10 @@ pub struct Connector {
 }
 
 #[derive(Debug, FromSql)]
+#[postgres(name = "obs")]
 struct Obs {
-    value: f32,
-    time: DateTime<Utc>,
+    obstime: DateTime<Utc>,
+    obsvalue: f32,
 }
 
 // TODO: this should probably live somewhere else
@@ -35,6 +36,7 @@ pub struct Location {
     lat: Option<f32>,
     lon: Option<f32>,
     hamsl: Option<f32>,
+    #[postgres(name = "hag")]
     _hag: Option<f32>,
 }
 
@@ -68,12 +70,12 @@ fn regularize(
     let mut curr_obs_time = start_time;
 
     for obs in obses {
-        while curr_obs_time < obs.time {
+        while curr_obs_time < obs.obstime {
             out.push(None);
             curr_obs_time = curr_obs_time + time_resolution;
         }
-        if curr_obs_time == obs.time {
-            out.push(Some(obs.value));
+        if curr_obs_time == obs.obstime {
+            out.push(Some(obs.obsvalue));
             curr_obs_time = curr_obs_time + time_resolution;
         } else {
             // In this case the observation is misaligned, so we should skip it. There's a case
@@ -185,7 +187,7 @@ impl Connector {
                 "
                 SELECT timeseries.id, data.values, timeseries.loc \
                 FROM ( \
-                    SELECT timeseries, ARRAY_AGG ((value, timestamp) ORDER BY timestamp ASC) as values \
+                    SELECT timeseries, ARRAY_AGG ((obstime, obsvalue)::obs ORDER BY obstime ASC) as values \
                     FROM data \
                     WHERE obstime BETWEEN $1 AND $2 \
                     GROUP BY timeseries \
@@ -194,7 +196,7 @@ impl Connector {
                     ON data.timeseries = timeseries.id \
                 JOIN labels.met \
                     ON met.timeseries = timeseries.id \
-                WHERE met.param_id == $3
+                WHERE met.param_id = $3
                 ",
                 &[&start_time, &end_time, &param_id],
             )
@@ -220,12 +222,16 @@ impl Connector {
             for row in data_results {
                 let ts_id: i32 = row.get(0);
                 let raw_values: Vec<Obs> = row.get(1);
-                let loc: Location = row.get(2);
+                let loc: Option<Location> = row.get(2);
 
                 // TODO: is there a better way to handle this? If we insert with default latlon we
                 // risk corrupting spatial checks, if not we miss QCing data we probably should be
                 // QCing... Perhaps we can change the definition of DataCache to accommodate this
                 // better?
+                if loc.is_none() {
+                    continue;
+                }
+                let loc = loc.unwrap();
                 if loc.lat.is_none() || loc.lon.is_none() || loc.hamsl.is_none() {
                     continue;
                 }
@@ -243,6 +249,11 @@ impl Connector {
                 lats.push(loc.lat.unwrap());
                 lons.push(loc.lon.unwrap());
                 elevs.push(loc.hamsl.unwrap());
+                // to get a sane result out of the integration test (for now) comment the loc
+                // Option checks, and uncomment these:
+                // lats.push(0.);
+                // lons.push(0.);
+                // elevs.push(0.);
             }
 
             DataCache::new(
