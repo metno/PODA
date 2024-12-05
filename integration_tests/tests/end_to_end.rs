@@ -573,9 +573,10 @@ async fn test_rove_connector(ts: TestData<'_>) {
                 panic!("Expected regular timeseries")
             };
 
+            // feels kinda silly we had to use the API just to get the ts_id, but what can you do?
             let ts_id = series.header.ts_id.to_string();
 
-            let data_cache = connector
+            let data_cache_single = connector
                 .fetch_data(
                     &SpaceSpec::One(ts_id.clone()),
                     &TimeSpec::new(
@@ -590,15 +591,53 @@ async fn test_rove_connector(ts: TestData<'_>) {
                 .await
                 .unwrap();
 
-            assert_eq!(data_cache.num_leading_points, 1);
-            assert_eq!(data_cache.num_leading_points, 1);
             assert_eq!(
-                data_cache.data,
+                data_cache_single.data,
                 vec![rove::data_switch::Timeseries {
-                    tag: ts_id,
+                    tag: ts_id.clone(),
                     values: vec![None, Some(0.), Some(0.), Some(0.), Some(0.)]
                 }],
             );
+            assert_eq!(
+                data_cache_single.start_time,
+                Timestamp(ts.start_time.timestamp())
+            );
+            assert_eq!(data_cache_single.period, RelativeDuration::hours(1));
+            assert_eq!(data_cache_single.num_leading_points, 1);
+            assert_eq!(data_cache_single.num_trailing_points, 1);
+
+            let data_cache_all = connector
+                .fetch_data(
+                    &SpaceSpec::All,
+                    &TimeSpec::new(
+                        Timestamp(ts.start_time.timestamp()),
+                        Timestamp((ts.start_time + Duration::hours(2)).timestamp()),
+                        RelativeDuration::hours(1),
+                    ),
+                    1,
+                    1,
+                    // TODO: this should probably go in SpaceSpec::All?
+                    Some(&param.id.to_string()),
+                )
+                .await
+                .unwrap();
+
+            assert_eq!(
+                data_cache_all.data,
+                // vec![rove::data_switch::Timeseries {
+                //     tag: ts_id,
+                //     values: vec![None, Some(0.), Some(0.), Some(0.), Some(0.)]
+                // }],
+                // TODO: replace below with above when we fix the location situation
+                vec![],
+            );
+            assert_eq!(
+                data_cache_all.start_time,
+                Timestamp(ts.start_time.timestamp())
+            );
+            assert_eq!(data_cache_all.period, RelativeDuration::hours(1));
+            assert_eq!(data_cache_all.num_leading_points, 1);
+            assert_eq!(data_cache_all.num_trailing_points, 1);
         }
     })
     .await
