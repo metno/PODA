@@ -38,8 +38,6 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 		return
 	}
 
-	dumpFunc := getDumpFunc(table)
-
 	// Used to limit connections to the database
 	semaphore := make(chan struct{}, config.MaxConn)
 
@@ -65,19 +63,11 @@ func DumpTable(table *db.Table, pool *pgxpool.Pool, config *Config) {
 					wg.Done()
 				}()
 
-				err := dumpFunc(
-					path,
-					DumpArgs{
-						element:   element,
-						station:   station,
-						dataTable: table.TableName,
-						flagTable: table.FlagTableName,
-						overwrite: config.Overwrite,
-					},
-					pool,
-				)
+				logStr := fmt.Sprintf("%s - %s - %s: ", table.TableName, station, element)
+
+				err := table.Dump(path, element, station, logStr, config.Overwrite, pool)
 				if err == nil {
-					slog.Info(fmt.Sprintf("%s - %s - %s: dumped successfully", table.TableName, station, element))
+					slog.Info(logStr + "dumped successfully")
 				}
 
 				// Release semaphore

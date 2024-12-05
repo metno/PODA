@@ -34,8 +34,6 @@ func ImportTable(table *kdvh.Table, cache *cache.Cache, pool *pgxpool.Pool, conf
 		return 0
 	}
 
-	convFunc := getConvertFunc(table)
-
 	for _, station := range stations {
 		stnr, err := getStationNumber(station, config.Stations)
 		if err != nil {
@@ -78,7 +76,7 @@ func ImportTable(table *kdvh.Table, cache *cache.Cache, pool *pgxpool.Pool, conf
 				}
 
 				filename := filepath.Join(stationDir, element.Name())
-				data, text, flag, err := parseData(filename, tsInfo, convFunc, table, config)
+				data, text, flag, err := parseData(filename, tsInfo, table, config)
 				if err != nil {
 					return
 				}
@@ -150,7 +148,7 @@ func getElementCode(element os.DirEntry, elementList []string) (string, error) {
 
 // Parses the observations in the CSV file, converts them with the table
 // ConvertFunction and returns three arrays that can be passed to pgx.CopyFromRows
-func parseData(filename string, tsInfo *cache.TsInfo, convFunc ConvertFunction, table *kdvh.Table, config *Config) ([][]any, [][]any, [][]any, error) {
+func parseData(filename string, tsInfo *kdvh.TsInfo, table *kdvh.Table, config *Config) ([][]any, [][]any, [][]any, error) {
 	file, err := os.Open(filename)
 	if err != nil {
 		slog.Warn(err.Error())
@@ -190,7 +188,8 @@ func parseData(filename string, tsInfo *cache.TsInfo, convFunc ConvertFunction, 
 			break
 		}
 
-		dataRow, textRow, flagRow, err := convFunc(KdvhObs{tsInfo, obsTime, cols[1], cols[2]})
+		obs := kdvh.KdvhObs{Obstime: obsTime, Data: cols[1], Flags: cols[2]}
+		dataRow, textRow, flagRow, err := table.Convert(&obs, tsInfo)
 		if err != nil {
 			return nil, nil, nil, err
 		}

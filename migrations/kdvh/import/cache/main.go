@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/rickb777/period"
 
 	kdvh "migrate/kdvh/db"
 	"migrate/lard"
@@ -35,18 +34,7 @@ func CacheMetadata(tables, stations, elements []string, database *kdvh.KDVH) *Ca
 	}
 }
 
-// Convenience struct that holds information for a specific timeseries
-type TsInfo struct {
-	Id       int32
-	Station  int32
-	Element  string
-	Offset   period.Period
-	Param    stinfosys.Param
-	Timespan utils.TimeSpan
-	Logstr   string
-}
-
-func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpool.Pool) (*TsInfo, error) {
+func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpool.Pool) (*kdvh.TsInfo, error) {
 	logstr := fmt.Sprintf("[%v - %v - %v]: ", table, station, element)
 	key := newKDVHKey(element, table, station)
 
@@ -86,7 +74,7 @@ func (cache *Cache) NewTsInfo(table, element string, station int32, pool *pgxpoo
 		return nil, err
 	}
 
-	return &TsInfo{
+	return &kdvh.TsInfo{
 		Id:       tsid,
 		Station:  station,
 		Element:  element,
