@@ -299,14 +299,14 @@ impl DataConnector for Connector {
                 let param_id = match extra_spec {
                     Some(param_id_string) => param_id_string.parse().map_err(|_| {
                         data_switch::Error::InvalidExtraSpec {
-                            data_source: "rove",
+                            data_source: "lard",
                             extra_spec: extra_spec.map(String::from),
                             source: Box::new(Error::InvalidParamId),
                         }
                     })?,
                     None => {
                         return Err(data_switch::Error::InvalidExtraSpec {
-                            data_source: "rove",
+                            data_source: "lard",
                             extra_spec: extra_spec.map(String::from),
                             source: Box::new(Error::InvalidParamId),
                         })
