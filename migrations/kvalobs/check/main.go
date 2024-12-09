@@ -23,17 +23,19 @@ type Config struct {
 }
 
 func (c *Config) Execute() {
-	kvalobs, histkvalobs := db.InitDBs()
+	dbs := db.InitDBs()
 	if utils.IsEmptyOrEqual(c.CheckName, "overlap") {
 		fmt.Println("Checking if some param IDs are stored in both the `data` and `text_data` tables")
-		c.checkDataAndTextParamsOverlap(&kvalobs)
-		c.checkDataAndTextParamsOverlap(&histkvalobs)
+		for _, db := range dbs {
+			c.checkDataAndTextParamsOverlap(&db)
+		}
 	}
 	if utils.IsEmptyOrEqual(c.CheckName, "non-scalars") {
 		fmt.Println("Checking if param IDs in `text_data` match non-scalar parameters in Stinfosys")
 		stinfoParams := getStinfoNonScalars()
-		c.checkNonScalars(&kvalobs, stinfoParams)
-		c.checkNonScalars(&histkvalobs, stinfoParams)
+		for _, db := range dbs {
+			c.checkNonScalars(&db, stinfoParams)
+		}
 	}
 }
 

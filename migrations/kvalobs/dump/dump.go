@@ -9,32 +9,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/gocarina/gocsv"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	kvalobs "migrate/kvalobs/db"
 	"migrate/utils"
 )
 
-func writeSeriesCSV[S kvalobs.DataSeries | kvalobs.TextSeries](series S, path string, label *kvalobs.Label) error {
-	filename := filepath.Join(path, label.ToFilename())
-	file, err := os.Create(filename)
-	if err != nil {
-		slog.Error(err.Error())
-		return err
-	}
-
-	// Write number of lines on first line, keep headers on 2nd line
-	file.Write([]byte(fmt.Sprintf("%v\n", len(series))))
-	if err = gocsv.Marshal(series, file); err != nil {
-		slog.Error(err.Error())
-		return err
-	}
-
-	return nil
-}
-
-func getLabels(table kvalobs.Table, pool *pgxpool.Pool, config *Config) (labels []*kvalobs.Label, err error) {
+func getLabels(table *kvalobs.Table, pool *pgxpool.Pool, config *Config) (labels []*kvalobs.Label, err error) {
 	labelFile := table.Path + "_labels.csv"
 
 	if _, err := os.Stat(labelFile); err != nil || config.UpdateLabels {
@@ -57,7 +38,7 @@ func getStationLabelMap(labels []*kvalobs.Label) map[int32][]*kvalobs.Label {
 	return labelmap
 }
 
-func dumpTable(table kvalobs.Table, pool *pgxpool.Pool, config *Config) {
+func dumpTable(table *kvalobs.Table, pool *pgxpool.Pool, config *Config) {
 	if !config.LabelsOnly {
 		utils.SetLogFile(table.Path, "dump")
 	}
@@ -136,13 +117,12 @@ func dumpDB(database kvalobs.DB, config *Config) {
 		return
 	}
 
-	if utils.IsEmptyOrEqual(config.Table, kvalobs.DATA_TABLE_NAME) {
-		table := DataTable(path)
-		dumpTable(table, pool, config)
-	}
+	for name, table := range database.Tables {
+		if !utils.IsEmptyOrEqual(config.Table, name) {
+			continue
+		}
 
-	if utils.IsEmptyOrEqual(config.Table, kvalobs.TEXT_TABLE_NAME) {
-		table := TextTable(path)
+		table.Path = filepath.Join(path, table.Name)
 		dumpTable(table, pool, config)
 	}
 }
