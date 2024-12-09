@@ -22,6 +22,10 @@ debug_test TEST: setup
 debug_migrations: setup
     -@ cd migrations && go test -v ./...
 
+# psql into the container database
+psql:
+    @docker exec -it lard_tests psql -U postgres
+
 setup:
 	@ echo "Starting Postgres docker container..."
 	docker run --name lard_tests -e POSTGRES_PASSWORD=postgres -p 5432:5432 -d postgres
