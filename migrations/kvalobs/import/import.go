@@ -17,7 +17,7 @@ import (
 	"migrate/utils"
 )
 
-func ImportTable(table kvalobs.Table, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (int64, error) {
+func ImportTable(table *kvalobs.Table, cache *cache.Cache, pool *pgxpool.Pool, config *Config) (int64, error) {
 	fmt.Printf("Importing from %q...\n", table.Path)
 	defer fmt.Println(strings.Repeat("- ", 40))
 
@@ -104,22 +104,16 @@ func ImportTable(table kvalobs.Table, cache *cache.Cache, pool *pgxpool.Pool, co
 	return rowsInserted, nil
 }
 
-// TODO: while importing we trust that kvalobs and stinfosys have the same
-// non scalar parameters, which might not be the case
 func ImportDB(database kvalobs.DB, cache *cache.Cache, pool *pgxpool.Pool, config *Config) {
 	path := filepath.Join(config.Path, database.Name)
 
-	if utils.IsEmptyOrEqual(config.Table, kvalobs.DATA_TABLE_NAME) {
-		table := DataTable(path)
+	for name, table := range database.Tables {
+		if !utils.IsEmptyOrEqual(config.Table, name) {
+			continue
+		}
+
+		table.Path = filepath.Join(path, table.Name)
 		utils.SetLogFile(table.Path, "import")
-
-		ImportTable(table, cache, pool, config)
-	}
-
-	if utils.IsEmptyOrEqual(config.Table, kvalobs.TEXT_TABLE_NAME) {
-		table := TextTable(path)
-		utils.SetLogFile(table.Path, "import")
-
 		ImportTable(table, cache, pool, config)
 	}
 }

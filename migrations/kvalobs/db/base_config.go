@@ -15,7 +15,7 @@ type BaseConfig struct {
 	FromTime *utils.Timestamp `arg:"--from" help:"Fetch data only starting from this date-only timestamp"`
 	ToTime   *utils.Timestamp `arg:"--to" help:"Fetch data only until this date-only timestamp"`
 	Database string           `arg:"--db" help:"Which database to process, all by default. Choices: ['kvalobs', 'histkvalobs']"`
-	Table    string           `help:"Which table to process, all by default. Choices: ['data', 'text']"`
+	Table    string           `help:"Which table to process, all by default. Choices: ['data', 'text_data']"`
 	Stations []int32          `help:"Optional space separated list of station numbers"`
 	TypeIds  []int32          `help:"Optional space separated list of type IDs"`
 	ParamIds []int32          `help:"Optional space separated list of param IDs"`

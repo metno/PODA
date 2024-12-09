@@ -8,6 +8,7 @@ import (
 
 // Maps to `data` and `text_data` tables in Kvalobs
 type Table struct {
+	Name       string
 	Path       string        // Path of the dumped table
 	DumpLabels LabelDumpFunc // Function that dumps labels from the table
 	DumpSeries ObsDumpFunc   // Function that dumps observations from the table
@@ -22,6 +23,3 @@ type ObsDumpFunc func(label *Label, timespan *utils.TimeSpan, path string, pool 
 
 // Lard Import function
 type ImportFunc func(tsid int32, label *Label, filename, logStr string, pool *pgxpool.Pool) (int64, error)
-
-// How to read dumped CSV, returns one array for observations and one for flags
-type ReadCSVFunc func(tsid int32, label *Label, filename string) ([][]any, [][]any, error)

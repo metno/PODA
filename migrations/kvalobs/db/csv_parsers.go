@@ -1,76 +1,15 @@
-package port
+package db
 
 import (
 	"bufio"
-	"log/slog"
-	"os"
-	"path/filepath"
+	"migrate/lard"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	kvalobs "migrate/kvalobs/db"
-	"migrate/lard"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Returns a DataTable for import
-func DataTable(path string) kvalobs.Table {
-	return kvalobs.Table{
-		Path:   filepath.Join(path, kvalobs.DATA_TABLE_NAME),
-		Import: importData,
-	}
-}
-
-func importData(tsid int32, label *kvalobs.Label, filename, logStr string, pool *pgxpool.Pool) (int64, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		slog.Error(logStr + err.Error())
-		return 0, err
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	// Parse number of rows
-	scanner.Scan()
-	rowCount, _ := strconv.Atoi(scanner.Text())
-
-	// Skip header
-	scanner.Scan()
-
-	if label.IsSpecialCloudType() {
-		text, err := parseSpecialCloudType(tsid, rowCount, scanner)
-		if err != nil {
-			slog.Error(logStr + err.Error())
-			return 0, err
-		}
-
-		count, err := lard.InsertTextData(text, pool, logStr)
-		if err != nil {
-			slog.Error(logStr + err.Error())
-			return 0, err
-		}
-
-		return count, nil
-	}
-
-	data, flags, err := parseDataCSV(tsid, rowCount, scanner)
-	count, err := lard.InsertData(data, pool, logStr)
-	if err != nil {
-		slog.Error(logStr + err.Error())
-		return 0, err
-	}
-
-	if err := lard.InsertFlags(flags, pool, logStr); err != nil {
-		slog.Error(logStr + err.Error())
-		return 0, err
-	}
-
-	return count, nil
-}
+// Here we define how to parse dumped CSV depending on the table
 
 func parseDataCSV(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, [][]any, error) {
 	data := make([][]any, 0, rowCount)
@@ -100,10 +39,10 @@ func parseDataCSV(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, []
 		corrected := float32(corrected64)
 
 		// Filter out special values that in Kvalobs stand for null observations
-		if !slices.Contains(kvalobs.NULL_VALUES, original) {
+		if !slices.Contains(NULL_VALUES, original) {
 			originalPtr = &original
 		}
-		if !slices.Contains(kvalobs.NULL_VALUES, corrected) {
+		if !slices.Contains(NULL_VALUES, corrected) {
 			correctedPtr = &corrected
 		}
 
@@ -124,8 +63,8 @@ func parseDataCSV(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, []
 			Obstime:     obstime,
 			Original:    originalPtr,
 			Corrected:   correctedPtr,
-			Controlinfo: &fields[4], // Never null, has default values in KValobs
-			Useinfo:     &fields[5], // Never null, has default values in KValobs
+			Controlinfo: &fields[4], // Never null, has default value in Kvalobs
+			Useinfo:     &fields[5], // Never null, has default value in Kvalobs
 			Cfailed:     cfailed,
 		}
 
@@ -134,6 +73,65 @@ func parseDataCSV(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, []
 	}
 
 	return data, flags, nil
+}
+
+// Text obs are not flagged
+func parseTextCSV(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, error) {
+	data := make([][]any, 0, rowCount)
+	for scanner.Scan() {
+		// obstime, original, tbtime
+		fields := strings.Split(scanner.Text(), ",")
+
+		obstime, err := time.Parse(time.RFC3339, fields[0])
+		if err != nil {
+			return nil, err
+		}
+
+		lardObs := lard.TextObs{
+			Id:      tsid,
+			Obstime: obstime,
+			Text:    &fields[1],
+		}
+
+		data = append(data, lardObs.ToRow())
+	}
+
+	return data, nil
+}
+
+// Function for paramids 2751, 2752, 2753, 2754 that were stored as text data
+// but should instead be treated as scalars
+// TODO: I'm not sure these params should be scalars given that the other cloud types are not.
+// Should all cloud types be integers?
+func parseMetarCloudType(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, error) {
+	data := make([][]any, 0, rowCount)
+	for scanner.Scan() {
+		// obstime, original, tbtime
+		fields := strings.Split(scanner.Text(), ",")
+
+		obstime, err := time.Parse(time.RFC3339, fields[0])
+		if err != nil {
+			return nil, err
+		}
+
+		val, err := strconv.ParseFloat(fields[1], 32)
+		if err != nil {
+			return nil, err
+		}
+
+		original := float32(val)
+		lardObs := lard.DataObs{
+			Id:      tsid,
+			Obstime: obstime,
+			Data:    &original,
+		}
+
+		data = append(data, lardObs.ToRow())
+	}
+
+	// TODO: Original text obs were not flagged, so we don't return a flags?
+	// Or should we return default values?
+	return data, nil
 }
 
 // Function for paramids 305, 306, 307, 308 that were stored as scalar data

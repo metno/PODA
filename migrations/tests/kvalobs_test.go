@@ -20,8 +20,8 @@ const LARD_STRING string = "host=localhost user=postgres dbname=postgres passwor
 const DUMPS_PATH string = "./files"
 
 type KvalobsTestCase struct {
-	db           kvalobs.DB
-	table        kvalobs.Table
+	db           string
+	table        string
 	station      int32
 	paramid      int32
 	typeid       int32
@@ -59,22 +59,20 @@ func TestImportDataKvalobs(t *testing.T) {
 	}
 	defer pool.Close()
 
-	prod, hist := kvalobs.InitDBs()
-	prod.Path = filepath.Join(DUMPS_PATH, prod.Name)
-	hist.Path = filepath.Join(DUMPS_PATH, hist.Name)
+	dbs := kvalobs.InitDBs()
 
 	cases := []KvalobsTestCase{
 		{
-			db:           hist,
-			table:        port.DataTable(hist.Path),
+			db:           "histkvalobs",
+			table:        "data",
 			station:      18700,
 			paramid:      313,
 			permit:       1,
 			expectedRows: 39,
 		},
 		{
-			db:           prod,
-			table:        port.TextTable(prod.Path),
+			db:           "kvalobs",
+			table:        "text_data",
 			station:      18700,
 			permit:       1,
 			expectedRows: 182,
@@ -83,7 +81,12 @@ func TestImportDataKvalobs(t *testing.T) {
 
 	for _, c := range cases {
 		config, cache := c.mockConfig()
-		insertedRows, err := port.ImportTable(c.table, cache, pool, config)
+		db := dbs[c.db]
+
+		table := db.Tables[c.table]
+		table.Path = filepath.Join(DUMPS_PATH, db.Name, table.Name)
+
+		insertedRows, err := port.ImportTable(table, cache, pool, config)
 
 		switch {
 		case err != nil:

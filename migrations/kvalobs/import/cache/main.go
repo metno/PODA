@@ -27,7 +27,6 @@ func New(kvalobs db.DB) *Cache {
 	defer conn.Close(ctx)
 
 	permits := stinfosys.NewPermitTables(conn)
-	// params := stinfosys.GetParamScalarMap(conn)
 	// timeseries :=
 
 	timespans := cacheKvalobsTimeseriesTimespans(kvalobs)

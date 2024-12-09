@@ -17,14 +17,11 @@ type Config struct {
 }
 
 func (config *Config) Execute() {
-	kvalobs, histkvalobs := db.InitDBs()
-	// tables := []*db.Table{}
-
-	if utils.IsEmptyOrEqual(config.Database, kvalobs.Name) {
-		dumpDB(kvalobs, config)
-	}
-
-	if utils.IsEmptyOrEqual(config.Database, histkvalobs.Name) {
-		dumpDB(histkvalobs, config)
+	dbs := db.InitDBs()
+	for name, db := range dbs {
+		if !utils.IsEmptyOrEqual(config.Database, name) {
+			continue
+		}
+		dumpDB(db, config)
 	}
 }
