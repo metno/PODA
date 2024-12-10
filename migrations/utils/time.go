@@ -18,9 +18,9 @@ func (ts *Timestamp) UnmarshalText(b []byte) error {
 	return nil
 }
 
-func (ts *Timestamp) Format(layout string) string {
-	return ts.t.Format(layout)
-}
+// func (ts *Timestamp) Format(layout string) string {
+// 	return ts.t.Format(layout)
+// }
 
 func (ts *Timestamp) Inner() *time.Time {
 	if ts == nil {
@@ -33,4 +33,16 @@ func (ts *Timestamp) Inner() *time.Time {
 type TimeSpan struct {
 	From *time.Time
 	To   *time.Time
+}
+
+func (t *TimeSpan) ToString() string {
+	from := "from"
+	to := "to"
+	if t.From != nil {
+		from += t.From.Format(time.DateOnly)
+	}
+	if t.To != nil {
+		to += t.To.Format(time.DateOnly)
+	}
+	return from + "_" + to
 }

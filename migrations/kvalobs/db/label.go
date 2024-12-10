@@ -92,6 +92,8 @@ func WriteLabelCSV(path string, labels []*Label) error {
 	err = gocsv.Marshal(labels, file)
 	if err != nil {
 		slog.Error(err.Error())
+	} else {
+		slog.Info(fmt.Sprintf("Dumped %d labels!", len(labels)))
 	}
 	return err
 }

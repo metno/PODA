@@ -4,6 +4,8 @@ import (
 	"context"
 	"log/slog"
 	"migrate/utils"
+	"slices"
+	"sync"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,53 +13,152 @@ import (
 
 // Here are implemented the `LabelDumpFunc` stored inside the Table struct
 
+const OBSERVATIONS_QUERY string = `SELECT DISTINCT stationid, typeid FROM observations
+WHERE ($1::timestamp IS NULL OR obstime >= $1)
+  AND ($2::timestamp IS NULL OR obstime < $2)
+ORDER BY stationid`
+
+const OBSDATA_QUERY string = `SELECT DISTINCT paramid, sensor::int, level FROM obsdata
+JOIN observations USING(observationid)
+WHERE stationid = $1
+  AND typeid = $2
+  AND ($3::timestamp IS NULL OR obstime >= $3)
+  AND ($4::timestamp IS NULL OR obstime < $4)`
+
+const OBSTEXTDATA_QUERY string = `SELECT DISTINCT paramid FROM obstextdata
+JOIN observations USING(observationid)
+WHERE stationid = $1
+  AND typeid = $2
+  AND ($3::timestamp IS NULL OR obstime >= $3)
+  AND ($4::timestamp IS NULL OR obstime < $4)`
+
+type StationType struct {
+	stationid int32
+	typeid    int32
+}
+
+func GetUniqueStationsAndTypeIds(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*StationType, error) {
+	rows, err := pool.Query(context.TODO(), OBSERVATIONS_QUERY, timespan.From, timespan.To)
+	if err != nil {
+		return nil, err
+	}
+
+	labels := make([]*StationType, 0, rows.CommandTag().RowsAffected())
+	return pgx.AppendRows(labels, rows, func(row pgx.CollectableRow) (*StationType, error) {
+		var label StationType
+		err := row.Scan(&label.stationid, &label.typeid)
+		return &label, err
+	})
+}
+
 func dumpDataLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*Label, error) {
-	query := `SELECT DISTINCT stationid, typeid, paramid, sensor::int, level 
-                FROM data
-                WHERE ($1::timestamp IS NULL OR obstime >= $1) 
-                  AND ($2::timestamp IS NULL OR obstime < $2)
-                ORDER BY stationid`
+	// First query stationid and typeid from observations
+	// Then query paramid, sensor, level from obsdata
+	// This is faster than querying all of them together from data
 
-	slog.Info("Querying data labels...")
-	rows, err := pool.Query(context.TODO(), query, timespan.From, timespan.To)
+	slog.Info("Querying data labels labels...")
+	// TODO: this should be done outside (can be reused for data and text)
+	stationsAndTypes, err := GetUniqueStationsAndTypeIds(timespan, pool)
 	if err != nil {
 		slog.Error(err.Error())
 		return nil, err
 	}
 
-	slog.Info("Collecting data labels...")
-	labels := make([]*Label, 0, rows.CommandTag().RowsAffected())
-	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByName[Label])
-	if err != nil {
-		slog.Error(err.Error())
-		return nil, err
+	bar := utils.NewBar(len(stationsAndTypes), "Data labels")
+	var labels []*Label
+	var wg sync.WaitGroup
+
+	// TODO: can we move this somewhere else?
+	semaphore := make(chan struct{}, 4)
+
+	for _, s := range stationsAndTypes {
+		wg.Add(1)
+		semaphore <- struct{}{}
+
+		go func() {
+			defer func() {
+				bar.Add(1)
+				wg.Done()
+				<-semaphore
+			}()
+
+			rows, err := pool.Query(context.TODO(), OBSDATA_QUERY, s.stationid, s.typeid, timespan.From, timespan.To)
+			if err != nil {
+				slog.Error(err.Error())
+				return
+			}
+
+			innerLabels := make([]*Label, 0, rows.CommandTag().RowsAffected())
+			innerLabels, err = pgx.AppendRows(innerLabels, rows, func(row pgx.CollectableRow) (*Label, error) {
+				label := Label{StationID: s.stationid, TypeID: s.typeid}
+				err := row.Scan(&label.ParamID, &label.Sensor, &label.Level)
+				return &label, err
+			})
+
+			if err != nil {
+				slog.Error(err.Error())
+				return
+			}
+
+			labels = slices.Concat(labels, innerLabels)
+		}()
 	}
+
+	wg.Wait()
 
 	return labels, nil
 }
 
 func dumpTextLabels(timespan *utils.TimeSpan, pool *pgxpool.Pool) ([]*Label, error) {
-	// NOTE: `param` table is empty in histkvalobs
-	query := `SELECT DISTINCT stationid, typeid, paramid, NULL AS sensor, NULL AS level
-                FROM text_data
-                WHERE ($1::timestamp IS NULL OR obstime >= $1) 
-                  AND ($2::timestamp IS NULL OR obstime < $2)
-                ORDER BY stationid`
+	// First query stationid and typeid from observations
+	// Then query paramid, sensor, level from obsdata
+	// This is faster than querying all of them together from data
 
-	slog.Info("Querying text labels...")
-	rows, err := pool.Query(context.TODO(), query, timespan.From, timespan.To)
+	slog.Info("Querying data labels labels...")
+	// TODO: this should be done outside (can be reused for data and text)
+	stationsAndTypes, err := GetUniqueStationsAndTypeIds(timespan, pool)
 	if err != nil {
 		slog.Error(err.Error())
 		return nil, err
 	}
 
-	slog.Info("Collecting text labels...")
-	labels := make([]*Label, 0, rows.CommandTag().RowsAffected())
-	labels, err = pgx.AppendRows(labels, rows, pgx.RowToAddrOfStructByName[Label])
-	if err != nil {
-		slog.Error(err.Error())
-		return nil, err
-	}
+	bar := utils.NewBar(len(stationsAndTypes), "Text labels")
+	var labels []*Label
+	var wg sync.WaitGroup
 
+	// TODO: can we move this somewhere else?
+	semaphore := make(chan struct{}, 4)
+	for _, s := range stationsAndTypes {
+		wg.Add(1)
+		semaphore <- struct{}{}
+
+		go func() {
+			defer func() {
+				bar.Add(1)
+				wg.Done()
+				<-semaphore
+			}()
+
+			rows, err := pool.Query(context.TODO(), OBSTEXTDATA_QUERY, s.stationid, s.typeid, timespan.From, timespan.To)
+			if err != nil {
+				slog.Error(err.Error())
+				return
+			}
+
+			innerLabels := make([]*Label, 0, rows.CommandTag().RowsAffected())
+			innerLabels, err = pgx.AppendRows(innerLabels, rows, func(row pgx.CollectableRow) (*Label, error) {
+				label := Label{StationID: s.stationid, TypeID: s.typeid}
+				err := row.Scan(&label.ParamID)
+				return &label, err
+			})
+
+			if err != nil {
+				slog.Error(err.Error())
+				return
+			}
+			labels = slices.Concat(labels, innerLabels)
+		}()
+	}
+	wg.Wait()
 	return labels, nil
 }
