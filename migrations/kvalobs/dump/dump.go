@@ -15,11 +15,11 @@ import (
 	"migrate/utils"
 )
 
-func getLabels(table *kvalobs.Table, pool *pgxpool.Pool, config *Config) (labels []*kvalobs.Label, err error) {
-	labelFile := table.Path + "_labels.csv"
+func getLabels(table *kvalobs.Table, pool *pgxpool.Pool, timespan *utils.TimeSpan, updateLabels bool) (labels []*kvalobs.Label, err error) {
+	labelFile := fmt.Sprintf("%s_labels_%s.csv", table.Path, timespan.ToString())
 
-	if _, err := os.Stat(labelFile); err != nil || config.UpdateLabels {
-		labels, err = table.DumpLabels(config.TimeSpan(), pool)
+	if _, err := os.Stat(labelFile); err != nil || updateLabels {
+		labels, err = table.DumpLabels(timespan, pool)
 		if err != nil {
 			return nil, err
 		}
@@ -45,13 +45,13 @@ func dumpTable(table *kvalobs.Table, pool *pgxpool.Pool, config *Config) {
 	fmt.Printf("Dumping to %q...\n", table.Path)
 	defer fmt.Println(strings.Repeat("- ", 40))
 
-	labels, err := getLabels(table, pool, config)
+	timespan := config.TimeSpan()
+	labels, err := getLabels(table, pool, timespan, config.UpdateLabels)
 	if err != nil || config.LabelsOnly {
 		return
 	}
 
 	stationMap := getStationLabelMap(labels)
-	timespan := config.TimeSpan()
 
 	// Used to limit connections to the database
 	semaphore := make(chan struct{}, config.MaxConn)
@@ -117,6 +117,8 @@ func dumpDB(database kvalobs.DB, config *Config) {
 		return
 	}
 
+	// TODO: dump labels first for both tables and then pass them to dumpTable
+	// or have only choices of dumping labels
 	for name, table := range database.Tables {
 		if !utils.IsEmptyOrEqual(config.Table, name) {
 			continue

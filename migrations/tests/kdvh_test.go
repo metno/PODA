@@ -63,7 +63,7 @@ func TestImportKDVH(t *testing.T) {
 
 	kdvh := db.Init()
 
-	// TODO: test does not fail, if flags are not inserted
+	// TODO: test does not fail if flags are not inserted
 	// TODO: bar does not work well with log print outs
 	for _, c := range testCases {
 		config, cache := c.mockConfig()

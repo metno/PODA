@@ -21,8 +21,8 @@ type Config struct {
 
 func (config *Config) Execute() error {
 	dbs := kvalobs.InitDBs()
-	// Only cache from kvalobs?
-	cache := cache.New(dbs["kvalobs"])
+	// Only cache from histkvalobs?
+	cache := cache.New(dbs["histkvalobs"])
 
 	pool, err := pgxpool.New(context.Background(), os.Getenv(lard.LARD_ENV_VAR))
 	if err != nil {
