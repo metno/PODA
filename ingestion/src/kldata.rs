@@ -183,11 +183,14 @@ fn parse_obs<'a>(
                     // NOTE: we assume ref_params marked as scalar in Stinfosys to be floats (but
                     // could be ints, which wouldn't be ideal)
                     if ref_param.is_scalar {
-                        // NOTE: some params can be empty (old formats that were carried over
+                        // NOTE(1): some params can be empty (old formats that were carried over
                         // or a hacky way to have the observations deleted)
-                        if val.is_empty() {
+                        // NOTE(2): some params can be simply "-" instead of being empty (hack?
+                        // Does it have a meaning?)
+                        if val.is_empty() || val == "-" {
                             ObsType::Scalar(None)
                         } else {
+                            // TODO: should we simply return ObsType::Scalar(None) instead?
                             let parsed = val.parse().map_err(|_| {
                                 Error::Parse(format!("value {} could not be parsed as float", val))
                             })?;
@@ -576,13 +579,14 @@ mod tests {
         ]);
         "unrecognised param code"
     )]
-    #[test_case("20240910000000,-0.50,,0.70,",
+    #[test_case("20240910000000,-0.50,,0.70,,-",
         &[
 // TA,RAC_01,BAT,TD,RI_01,RR_01,QSI_01,QSI_01(1,0),PO,UU,ANTP_01,WAWA_01,TWB,DG_01,DD,FF,FG_01,FGN_01
             ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
             ObsinnId{param_code: "RI_01".to_string(), sensor_and_level: None},
             ObsinnId{param_code: "FG_01".to_string(), sensor_and_level: None},
             ObsinnId{param_code: "FGN_01".to_string(), sensor_and_level: None},
+            ObsinnId{param_code: "TJ".to_string(), sensor_and_level: Some((0, 3000))}
         ] => Ok(vec![
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
@@ -604,9 +608,13 @@ mod tests {
                 id: ObsinnId{param_code: "FGN_01".to_string(), sensor_and_level: None},
                 value: NonScalar("")
             },
+            ObsinnObs{
+                timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
+                id: ObsinnId{param_code: "TJ".to_string(), sensor_and_level: Some((0, 3000))},
+                value: Scalar(None)
+            },
         ]);
         "parameter with missing observations"
-
     )]
     fn test_parse_obs<'a>(data: &'a str, cols: &[ObsinnId]) -> Result<Vec<ObsinnObs<'a>>, Error> {
         let param_conversions = get_conversions("resources/paramconversions.csv").unwrap();
