@@ -27,6 +27,7 @@ func ImportTable(table *kvalobs.Table, cache *cache.Cache, pool *pgxpool.Pool, c
 		return 0, err
 	}
 
+	fmt.Printf("Number of stations to dump: %d...\n", len(stations))
 	var rowsInserted int64
 	for _, station := range stations {
 		stnr, err := strconv.ParseInt(station.Name(), 10, 32)

@@ -15,11 +15,11 @@ import (
 	"migrate/utils"
 )
 
-func getLabels(table *kvalobs.Table, pool *pgxpool.Pool, timespan *utils.TimeSpan, updateLabels bool) (labels []*kvalobs.Label, err error) {
+func getLabels(table *kvalobs.Table, pool *pgxpool.Pool, timespan *utils.TimeSpan, config *Config) (labels []*kvalobs.Label, err error) {
 	labelFile := fmt.Sprintf("%s_labels_%s.csv", table.Path, timespan.ToString())
 
-	if _, err := os.Stat(labelFile); err != nil || updateLabels {
-		labels, err = table.DumpLabels(timespan, pool)
+	if _, err := os.Stat(labelFile); err != nil || config.UpdateLabels {
+		labels, err = table.DumpLabels(timespan, pool, config.MaxConn)
 		if err != nil {
 			return nil, err
 		}
@@ -46,7 +46,7 @@ func dumpTable(table *kvalobs.Table, pool *pgxpool.Pool, config *Config) {
 	defer fmt.Println(strings.Repeat("- ", 40))
 
 	timespan := config.TimeSpan()
-	labels, err := getLabels(table, pool, timespan, config.UpdateLabels)
+	labels, err := getLabels(table, pool, timespan, config)
 	if err != nil || config.LabelsOnly {
 		return
 	}
@@ -117,8 +117,6 @@ func dumpDB(database kvalobs.DB, config *Config) {
 		return
 	}
 
-	// TODO: dump labels first for both tables and then pass them to dumpTable
-	// or have only choices of dumping labels
 	for name, table := range database.Tables {
 		if !utils.IsEmptyOrEqual(config.Table, name) {
 			continue
