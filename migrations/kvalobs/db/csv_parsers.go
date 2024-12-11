@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-// Here we define how to parse dumped CSV depending on the table
-
 func parseDataCSV(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, [][]any, error) {
 	data := make([][]any, 0, rowCount)
 	flags := make([][]any, 0, rowCount)

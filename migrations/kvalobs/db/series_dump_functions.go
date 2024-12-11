@@ -13,8 +13,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Here are implemented the `ObsDumpFunc` stored inside the Table struct
-
 func dumpDataSeries(label *Label, timespan *utils.TimeSpan, path string, pool *pgxpool.Pool) error {
 	// NOTE: sensor and level could be NULL, but in reality they have default values
 	query := `SELECT obstime, original, tbtime, corrected, controlinfo, useinfo, cfailed
