@@ -73,6 +73,7 @@ struct IngestorState {
     db_pool: PgConnectionPool,
     param_conversions: ParamConversions, // converts param codes to element ids
     permit_tables: Arc<RwLock<(ParamPermitTable, StationPermitTable)>>,
+    qc_scheduler: Arc<rove::Scheduler<'static>>,
 }
 
 impl FromRef<IngestorState> for PgConnectionPool {
@@ -93,6 +94,12 @@ impl FromRef<IngestorState> for Arc<RwLock<(ParamPermitTable, StationPermitTable
     }
 }
 
+impl FromRef<IngestorState> for Arc<rove::Scheduler<'static>> {
+    fn from_ref(state: &IngestorState) -> Arc<rove::Scheduler<'static>> {
+        state.qc_scheduler.clone()
+    }
+}
+
 /// Represents the different Data types observation can have
 #[derive(Debug, PartialEq)]
 pub enum ObsType<'a> {
@@ -103,6 +110,8 @@ pub enum ObsType<'a> {
 /// Generic container for a piece of data ready to be inserted into the DB
 pub struct Datum<'a> {
     timeseries_id: i32,
+    // needed for QC
+    param_id: i32,
     timestamp: DateTime<Utc>,
     value: ObsType<'a>,
 }
@@ -110,7 +119,7 @@ pub struct Datum<'a> {
 pub type Data<'a> = Vec<Datum<'a>>;
 
 // TODO: benchmark insertion of scalar and non-scalar together vs separately?
-pub async fn insert_data(data: Data<'_>, conn: &mut PooledPgConn<'_>) -> Result<(), Error> {
+pub async fn insert_data(data: &Data<'_>, conn: &mut PooledPgConn<'_>) -> Result<(), Error> {
     // TODO: the conflict resolution on this query is an imperfect solution, and needs improvement
     //
     // I learned from Søren that obsinn and kvalobs organise updates and deletions by sending new
@@ -170,6 +179,10 @@ pub async fn insert_data(data: Data<'_>, conn: &mut PooledPgConn<'_>) -> Result<
     Ok(())
 }
 
+pub async fn qc_data(data: &Data<'_>, scheduler: &rove::Scheduler<'static>) -> Result<(), Error> {
+    todo!()
+}
+
 pub mod kldata;
 use kldata::{filter_and_label_kldata, parse_kldata};
 
@@ -193,6 +206,7 @@ async fn handle_kldata(
     State(pool): State<PgConnectionPool>,
     State(param_conversions): State<ParamConversions>,
     State(permit_table): State<Arc<RwLock<(ParamPermitTable, StationPermitTable)>>>,
+    State(qc_scheduler): State<Arc<rove::Scheduler<'static>>>,
     body: String,
 ) -> Json<KldataResp> {
     let result: Result<usize, Error> = async {
@@ -204,7 +218,9 @@ async fn handle_kldata(
             filter_and_label_kldata(obsinn_chunk, &mut conn, param_conversions, permit_table)
                 .await?;
 
-        insert_data(data, &mut conn).await?;
+        insert_data(&data, &mut conn).await?;
+
+        qc_data(&data, &qc_scheduler).await?;
 
         Ok(message_id)
     }
@@ -255,9 +271,12 @@ pub async fn run(
     db_pool: PgConnectionPool,
     param_conversion_path: &str,
     permit_tables: Arc<RwLock<(ParamPermitTable, StationPermitTable)>>,
+    qc_scheduler: rove::Scheduler<'static>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // set up param conversion map
     let param_conversions = get_conversions(param_conversion_path)?;
+
+    let qc_scheduler = Arc::new(qc_scheduler);
 
     // build our application with a single route
     let app = Router::new()
@@ -266,6 +285,7 @@ pub async fn run(
             db_pool,
             param_conversions,
             permit_tables,
+            qc_scheduler,
         });
 
     // run our app with hyper, listening globally on port 3001
