@@ -1,55 +1,42 @@
 package check
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"log"
-	"os"
-	"path/filepath"
 	"slices"
 	"strings"
-	"time"
-
-	"github.com/jackc/pgx/v5"
 
 	"migrate/kvalobs/db"
 	"migrate/stinfosys"
-	"migrate/utils"
 )
 
 type Config struct {
-	Path      string `arg:"-p" default:"./dumps" help:"Directory of the dumped data"`
-	CheckName string `arg:"positional" required:"true" help:"Choices: ['overlap', 'non-scalars']"`
+	DataFilename string `arg:"positional" required:"true" help:"data label file"`
+	TextFilename string `arg:"positional" required:"true" help:"text label file"`
 }
 
 func (c *Config) Execute() {
-	dbs := db.InitDBs()
-	if utils.IsEmptyOrEqual(c.CheckName, "overlap") {
-		fmt.Println("Checking if some param IDs are stored in both the `data` and `text_data` tables")
-		for _, db := range dbs {
-			c.checkDataAndTextParamsOverlap(&db)
-		}
+	dataParamids, derr := loadParamids(c.DataFilename)
+	textParamids, terr := loadParamids(c.TextFilename)
+	if derr != nil || terr != nil {
+		fmt.Println(errors.Join(derr, terr))
+		return
 	}
-	if utils.IsEmptyOrEqual(c.CheckName, "non-scalars") {
-		fmt.Println("Checking if param IDs in `text_data` match non-scalar parameters in Stinfosys")
-		stinfoParams := getStinfoNonScalars()
-		for _, db := range dbs {
-			c.checkNonScalars(&db, stinfoParams)
-		}
-	}
+
+	fmt.Println("Checking if some param IDs are stored in both the `data` and `text_data` tables")
+	c.checkDataAndTextParamsOverlap(dataParamids, textParamids)
+
+	fmt.Println("Checking if param IDs in `text_data` match non-scalar parameters in Stinfosys")
+	conn, ctx := stinfosys.Connect()
+	defer conn.Close(ctx)
+	stinfoParams := stinfosys.GetNonScalars(conn)
+	c.checkNonScalars(dataParamids, textParamids, stinfoParams)
 }
 
 // Simply checks if some params are found both in the data and text_data
-func (c *Config) checkDataAndTextParamsOverlap(database *db.DB) {
+func (c *Config) checkDataAndTextParamsOverlap(dataParamids, textParamids map[int32]int32) {
 	defer fmt.Println(strings.Repeat("- ", 40))
-	datapath := filepath.Join(c.Path, database.Name, db.DATA_TABLE_NAME+"_labels.csv")
-	textpath := filepath.Join(c.Path, database.Name, db.TEXT_TABLE_NAME+"_labels.csv")
-
-	dataParamids, derr := loadParamids(datapath)
-	textParamids, terr := loadParamids(textpath)
-	if derr != nil || terr != nil {
-		return
-	}
 
 	ids := make([]int32, 0, len(textParamids))
 	for id := range dataParamids {
@@ -89,38 +76,9 @@ type StinfoPair struct {
 	IsScalar bool  `db:"scalar"`
 }
 
-func getStinfoNonScalars() []int32 {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
-	conn, err := pgx.Connect(ctx, os.Getenv(stinfosys.STINFO_ENV_VAR))
-	if err != nil {
-		log.Fatal("Could not connect to Stinfosys. Make sure to be connected to the VPN. " + err.Error())
-	}
-	defer conn.Close(ctx)
-
-	rows, err := conn.Query(context.TODO(), "SELECT paramid FROM param WHERE scalar = false ORDER BY paramid")
-	if err != nil {
-		log.Fatal(err)
-	}
-	nonscalars, err := pgx.CollectRows(rows, pgx.RowTo[int32])
-	if err != nil {
-		log.Fatal(err)
-	}
-	return nonscalars
-}
-
 // Checks that text params in Kvalobs are considered non-scalar in Stinfosys
-func (c *Config) checkNonScalars(database *db.DB, nonscalars []int32) {
+func (c *Config) checkNonScalars(dataParamids, textParamids map[int32]int32, nonscalars []int32) {
 	defer fmt.Println(strings.Repeat("- ", 40))
-	datapath := filepath.Join(c.Path, database.Name, db.DATA_TABLE_NAME+"_labels.csv")
-	textpath := filepath.Join(c.Path, database.Name, db.TEXT_TABLE_NAME+"_labels.csv")
-
-	dataParamids, derr := loadParamids(datapath)
-	textParamids, terr := loadParamids(textpath)
-	if derr != nil || terr != nil {
-		return
-	}
 
 	for _, id := range nonscalars {
 		if _, ok := textParamids[id]; ok {
