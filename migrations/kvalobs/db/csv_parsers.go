@@ -100,7 +100,7 @@ func parseTextCSV(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, er
 // Function for paramids 2751, 2752, 2753, 2754 that were stored as text data
 // but should instead be treated as scalars
 // TODO: I'm not sure these params should be scalars given that the other cloud types are not.
-// Should all cloud types be integers?
+// Should all cloud types be integers or text?
 func parseMetarCloudType(tsid int32, rowCount int, scanner *bufio.Scanner) ([][]any, error) {
 	data := make([][]any, 0, rowCount)
 	for scanner.Scan() {
