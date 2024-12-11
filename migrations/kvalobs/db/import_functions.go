@@ -10,8 +10,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Here are implemented the `ImportFunc` stored inside the Table struct
-
 // NOTE:
 // - for both kvalobs and histkvalobs:
 //      - all stinfo non-scalar params that can be found in Kvalobs are stored in `text_data`

@@ -11,8 +11,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Here are implemented the `LabelDumpFunc` stored inside the Table struct
-
 const OBSDATA_QUERY string = `SELECT DISTINCT paramid, sensor::int, level FROM obsdata
 JOIN observations USING(observationid)
 WHERE stationid = $1
