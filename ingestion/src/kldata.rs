@@ -366,6 +366,7 @@ pub async fn filter_and_label_kldata<'a>(
 
         data.push(Datum {
             timeseries_id,
+            param_id: param.id,
             timestamp: in_datum.timestamp,
             value: in_datum.value,
         });

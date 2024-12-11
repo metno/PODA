@@ -1491,6 +1491,8 @@ dependencies = [
  "kafka",
  "quick-xml",
  "regex",
+ "rove",
+ "rove_connector",
  "serde",
  "thiserror",
  "tokio",

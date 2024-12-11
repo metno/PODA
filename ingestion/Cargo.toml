@@ -20,6 +20,8 @@ futures.workspace = true
 kafka.workspace = true
 quick-xml.workspace = true
 regex.workspace = true
+rove.workspace = true
+rove_connector = { path = "../rove_connector" }
 serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

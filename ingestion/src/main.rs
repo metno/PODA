@@ -1,5 +1,13 @@
 use bb8_postgres::PostgresConnectionManager;
-use std::sync::{Arc, RwLock};
+use rove::{
+    data_switch::{DataConnector, DataSwitch},
+    load_pipelines,
+};
+use rove_connector::Connector;
+use std::{
+    collections::HashMap,
+    sync::{Arc, RwLock},
+};
 use tokio_postgres::NoTls;
 
 use lard_ingestion::permissions;
@@ -23,6 +31,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let permit_tables = Arc::new(RwLock::new(permissions::fetch_permits().await?));
     let background_permit_tables = permit_tables.clone();
 
+    // Set up postgres connection pool
+    let manager =
+        PostgresConnectionManager::new_from_stringlike(std::env::var("LARD_CONN_STRING")?, NoTls)?;
+    let db_pool = bb8::Pool::builder().build(manager).await?;
+
+    // QC system
+    let scheduler = rove::Scheduler::new(
+        load_pipelines("").unwrap(),
+        DataSwitch::new(HashMap::from([(
+            "lard",
+            Box::new(Connector {
+                pool: db_pool.clone(),
+            }) as Box<dyn DataConnector + Send>,
+        )])),
+    );
+
     println!("Spawing task to fetch permissions from StInfoSys...");
     // background task to refresh permit tables every 30 mins
     tokio::task::spawn(async move {
@@ -42,11 +66,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         }
     });
 
-    // Set up postgres connection pool
-    let manager =
-        PostgresConnectionManager::new_from_stringlike(std::env::var("LARD_CONN_STRING")?, NoTls)?;
-    let db_pool = bb8::Pool::builder().build(manager).await?;
-
     // Spawn kvkafka reader
     #[cfg(feature = "kafka_prod")]
     {
@@ -60,5 +79,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Set up and run our server + database
     println!("Ingestion server started!");
-    lard_ingestion::run(db_pool, PARAMCONV, permit_tables).await
+    lard_ingestion::run(db_pool, PARAMCONV, permit_tables, scheduler).await
 }
