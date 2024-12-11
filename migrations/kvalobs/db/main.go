@@ -28,7 +28,7 @@ import (
 //     useinfo     | character(16)               |           |          | '0000000000000000'::bpchar
 //     cfailed     | text                        |           |          |
 //
-// - `data_history`: stores observations similar to `data`, but not sure what history refers to
+// - `data_history`: stores the history of QC pipelines for data observations
 //
 // - `default_missing`:
 // - `default_missing_values`: default values for some paramids (-32767)
@@ -91,20 +91,15 @@ import (
 //     tbtime    | timestamp without time zone |           | not null |
 //     typeid    | integer                     |           | not null |
 //
-// - `text_data_history`: stores observations similar to `text_data`, but not sure what history refers to
-//
-// NOTE: In `histkvalobs` only `data`, `data_history`, `text_data`, and `text_data_history` are non-empty.
+// - `text_data_history`: stores the history of QC pipelines for text observations ()
 //
 // IMPORTANT: considerations for migrations to LARD
 //     - LARD stores Timeseries labels (stationid, paramid, typeid, sensor, level) in a separate table
-//     - (sensor, level) can be NULL, while in Kvalobs they have default values (0,0)
+//     - In LARD (sensor, level) can both be NULL, while in Kvalobs they have default values ('0',0)
 //           => POSSIBLE INCONSISTENCY when importing to LARD
-//     - Timestamps are UTC
+//     - Timestamps in Kvalobs are UTC
 //     - Kvalobs doesn't have the concept of timeseries ID,
 //       instead there is a sequential ID associated with each observation row
-
-const DATA_TABLE_NAME string = "data"
-const TEXT_TABLE_NAME string = "text" // text_data
 
 // Special values that are treated as NULL in Kvalobs
 // TODO: are there more values we should be looking for?

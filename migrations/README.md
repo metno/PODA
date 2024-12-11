@@ -1,6 +1,6 @@
 # Migrations
 
-Go package used to dump tables from old databases (KDVH, Kvalobs) and import them into LARD.
+Go package that dumps tables from old databases (KDVH, Kvalobs) and imports them into LARD.
 
 ## Usage
 
@@ -10,16 +10,18 @@ Go package used to dump tables from old databases (KDVH, Kvalobs) and import the
    go build
    ```
 
-1. Dump tables from KDVH
+1. Dump tables
 
    ```terminal
    ./migrate kdvh dump
+   ./migrate kvalobs dump
    ```
 
 1. Import dumps into LARD
 
    ```terminal
    ./migrate kdvh import
+   ./migrate kvalobs import
    ```
 
 For each command, you can use the `--help` flag to see all available options.
