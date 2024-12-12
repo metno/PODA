@@ -15,6 +15,7 @@ bb8.workspace = true
 bb8-postgres.workspace = true
 bytes.workspace = true
 chrono.workspace = true
+chronoutil.workspace = true
 csv.workspace = true
 futures.workspace = true
 kafka.workspace = true
