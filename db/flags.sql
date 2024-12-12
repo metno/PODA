@@ -11,12 +11,14 @@ CREATE TABLE IF NOT EXISTS flags.confident (
 CREATE INDEX IF NOT EXISTS confident_timestamp_index ON flags.confident (obstime);
 CREATE INDEX IF NOT EXISTS confident_timeseries_index ON flags.confident USING HASH (timeseries);
 
+-- TODO: should this also have a column for qc_time or some such?
 CREATE TABLE IF NOT EXISTS flags.confident_provenance (
     timeseries INT4 NOT NULL,
     obstime TIMESTAMPTZ NOT NULL,
     pipeline TEXT NOT NULL,
     -- TODO: should this be an enum?
     flag INT4 NOT NULL,
+    -- TODO: better name? since this might be applied to flags that aren't fail but also aren't pass?
     fail_condition TEXT NULL,
     CONSTRAINT unique_confident_providence_timeseries_obstime_pipeline UNIQUE (timeseries, obstime, pipeline),
     CONSTRAINT fk_confident_providence_timeseries FOREIGN KEY (timeseries) REFERENCES public.timeseries

@@ -1486,6 +1486,7 @@ dependencies = [
  "bb8-postgres",
  "bytes",
  "chrono",
+ "chronoutil",
  "csv",
  "futures",
  "kafka",
@@ -2346,7 +2347,7 @@ dependencies = [
 [[package]]
 name = "rove"
 version = "0.1.1"
-source = "git+https://github.com/metno/rove.git#95a7770f473a30ea6646a0b9254e8f974b673055"
+source = "git+https://github.com/metno/rove.git?branch=lard_fixes#1d79a555847f9223c9f6ee459e7a480ff18f41bd"
 dependencies = [
  "async-trait",
  "chrono",

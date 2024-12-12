@@ -40,7 +40,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let scheduler = rove::Scheduler::new(
         load_pipelines("").unwrap(),
         DataSwitch::new(HashMap::from([(
-            "lard",
+            String::from("lard"),
             Box::new(Connector {
                 pool: db_pool.clone(),
             }) as Box<dyn DataConnector + Send>,
