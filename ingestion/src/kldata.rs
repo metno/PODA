@@ -236,13 +236,24 @@ pub fn parse_kldata(
 
     Ok((
         header.message_id,
-        parse_obs(csv_body, &columns, reference_params, header)?, // ObsinnChunk {
-                                                                  //     observations: parse_obs(csv_body, &columns, reference_params)?,
-                                                                  //     station_id: header.station_id,
-                                                                  //     type_id: header.type_id,
-                                                                  //     timestamp:,
-                                                                  // },
+        parse_obs(csv_body, &columns, reference_params, header)?,
     ))
+}
+
+// TODO: this is a messy hack, but it's the only way people at met currently have to determine
+// time_resolution. Ultimately we intend to store time_resolution info in the database under
+// public.timeseries or labels.met. This will be populated by a combination of a script that looks
+// at a timeseries's history, and manual editing by content managers.
+pub fn type_id_to_time_resolution(type_id: i32) -> Option<RelativeDuration> {
+    // Source for these matches: PDF presented by PiM
+    match type_id {
+        514 => Some(RelativeDuration::minutes(1)),
+        506 | 509 | 510 => Some(RelativeDuration::minutes(10)),
+        7 | 311 | 330 | 342 | 501 | 502 | 503 | 505 | 507 | 511 => Some(RelativeDuration::hours(1)),
+        522 => Some(RelativeDuration::days(1)),
+        399 => Some(RelativeDuration::years(1)),
+        _ => None,
+    }
 }
 
 // TODO: rewrite such that queries can be pipelined?
@@ -378,7 +389,7 @@ pub async fn filter_and_label_kldata<'a>(
         out_chunks.push(DataChunk {
             timestamp: chunk.timestamp,
             // TODO: real time_resolution (derive from type_id for now)
-            time_resolution: RelativeDuration::hours(1),
+            time_resolution: type_id_to_time_resolution(chunk.type_id),
             data,
         });
     }

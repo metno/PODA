@@ -120,7 +120,7 @@ pub struct Datum<'a> {
 /// Generic container for a piece of data ready to be inserted into the DB
 pub struct DataChunk<'a> {
     timestamp: DateTime<Utc>,
-    time_resolution: chronoutil::RelativeDuration,
+    time_resolution: Option<chronoutil::RelativeDuration>,
     data: Vec<Datum<'a>>,
 }
 
@@ -235,13 +235,16 @@ pub async fn qc_data(
 
     let mut qc_results: Vec<QcResult> = Vec::new();
     for chunk in chunks {
+        let time_resolution = match chunk.time_resolution {
+            Some(time_resolution) => time_resolution,
+            // if there's no time_resolution, we can't QC
+            None => continue,
+        };
         let timestamp = chunk.timestamp.timestamp();
+
         for datum in chunk.data.iter() {
-            let time_spec = TimeSpec::new(
-                Timestamp(timestamp),
-                Timestamp(timestamp),
-                chunk.time_resolution,
-            );
+            let time_spec =
+                TimeSpec::new(Timestamp(timestamp), Timestamp(timestamp), time_resolution);
             let space_spec = SpaceSpec::One(datum.timeseries_id.to_string());
             // TODO: load and fetch real pipeline
             let pipeline = "sample_pipeline";
