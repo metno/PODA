@@ -9,22 +9,6 @@ async fn insert_schema(client: &tokio_postgres::Client, filename: &str) -> Resul
     client.batch_execute(schema.as_str()).await
 }
 
-fn format_partition(start: &str, end: &str, table: &str) -> String {
-    // TODO: add multiple partitions?
-    format!(
-        "CREATE TABLE {table}_y{start}_to_y{end} PARTITION OF {table} \
-        FOR VALUES FROM ('{start}-01-01 00:00:00+00') TO ('{end}-01-01 00:00:00+00')",
-    )
-}
-
-async fn create_data_partitions(client: &tokio_postgres::Client) -> Result<(), Error> {
-    let scalar_string = format_partition("1950", "2100", "public.data");
-    let nonscalar_string = format_partition("1950", "2100", "public.nonscalar_data");
-
-    client.batch_execute(scalar_string.as_str()).await?;
-    client.batch_execute(nonscalar_string.as_str()).await
-}
-
 #[tokio::main]
 async fn main() {
     let (client, connection) = tokio_postgres::connect(CONNECT_STRING, NoTls)
@@ -38,10 +22,13 @@ async fn main() {
     });
 
     // NOTE: order matters
-    let schemas = ["db/public.sql", "db/labels.sql", "db/flags.sql"];
+    let schemas = [
+        "db/public.sql",
+        "db/partitions_generated.sql",
+        "db/labels.sql",
+        "db/flags.sql",
+    ];
     for schema in schemas {
         insert_schema(&client, schema).await.unwrap();
     }
-
-    create_data_partitions(&client).await.unwrap();
 }
