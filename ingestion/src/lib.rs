@@ -204,7 +204,10 @@ async fn handle_kldata(
             filter_and_label_kldata(obsinn_chunk, &mut conn, param_conversions, permit_table)
                 .await?;
 
-        insert_data(data, &mut conn).await?;
+        if let Err(e) = insert_data(data, &mut conn).await {
+            eprintln!("failed inserting data: {}", e);
+            return Err(e);
+        };
 
         Ok(message_id)
     }
