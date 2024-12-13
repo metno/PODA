@@ -27,7 +27,8 @@ func ImportTable(table *kvalobs.Table, cache *cache.Cache, pool *pgxpool.Pool, c
 		return 0, err
 	}
 
-	fmt.Printf("Number of stations to dump: %d...\n", len(stations))
+	importTimespan := config.TimeSpan()
+	fmt.Printf("Number of stations to import: %d...\n", len(stations))
 	var rowsInserted int64
 	for _, station := range stations {
 		stnr, err := strconv.ParseInt(station.Name(), 10, 32)
@@ -72,21 +73,23 @@ func ImportTable(table *kvalobs.Table, cache *cache.Cache, pool *pgxpool.Pool, c
 					return
 				}
 
-				timespan, err := cache.GetSeriesTimespan(label)
+				tsTimespan, err := cache.GetSeriesTimespan(label)
 				if err != nil {
 					slog.Error(logStr + err.Error())
 					return
 				}
 
 				// TODO: figure out where to get fromtime, kvalobs directly? Stinfosys?
-				tsid, err := lard.GetTimeseriesID(label.ToLard(), timespan, pool)
+				tsid, err := lard.GetTimeseriesID(label.ToLard(), tsTimespan, pool)
 				if err != nil {
 					slog.Error(logStr + err.Error())
 					return
 				}
 
 				filename := filepath.Join(stationDir, file.Name())
-				count, err := table.Import(tsid, label, filename, logStr, pool)
+				// TODO: it's probably better to dump in different directories
+				// instead of introducing runtime checks
+				count, err := table.Import(tsid, label, filename, logStr, importTimespan, pool)
 				if err != nil {
 					// Logged inside table.Import
 					return
