@@ -24,6 +24,3 @@ serde.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true
-
-[dev-dependencies]
-test-case.workspace = true

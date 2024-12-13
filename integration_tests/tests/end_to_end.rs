@@ -10,7 +10,6 @@ use chrono::{DateTime, Duration, DurationRound, TimeDelta, TimeZone, Utc};
 use chronoutil::RelativeDuration;
 use futures::{Future, FutureExt};
 use rove::data_switch::{DataConnector, SpaceSpec, TimeSpec, Timestamp};
-use test_case::test_case;
 use tokio::sync::mpsc;
 use tokio_postgres::NoTls;
 
@@ -92,7 +91,7 @@ impl<'a> Param<'a> {
 struct TestData<'a> {
     station_id: i32,
     type_id: i32,
-    params: &'a [Param<'a>],
+    params: Vec<Param<'a>>,
     start_time: DateTime<Utc>,
     period: Duration,
     len: usize,
@@ -175,14 +174,52 @@ fn mock_permit_tables() -> Arc<RwLock<(ParamPermitTable, StationPermitTable)>> {
     Arc::new(RwLock::new((param_permit, station_permit)))
 }
 
-#[test_case(0, 0, 0 => false; "stationid not in permit_tables")]
-#[test_case(10000, 0, 0 => false; "stationid in ParamPermitTable, timeseries closed")]
-#[test_case(10001, 0, 0 => true; "stationid in ParamPermitTable, timeseries open")]
-#[test_case(20000, 0, 0 => false; "stationid in StationPermitTable, timeseries closed")]
-#[test_case(20001, 0, 1 => true; "stationid in StationPermitTable, timeseries open")]
-fn test_timeseries_is_open(station_id: i32, type_id: i32, permit_id: i32) -> bool {
+#[test]
+fn test_timeseries_is_open() {
+    let cases = vec![
+        (0, 0, 0, false, "stationid not in permit_tables"),
+        (
+            10000,
+            0,
+            0,
+            false,
+            "stationid in ParamPermitTable, timeseries closed",
+        ),
+        (
+            10001,
+            0,
+            0,
+            true,
+            "stationid in ParamPermitTable, timeseries open",
+        ),
+        (
+            20000,
+            0,
+            0,
+            false,
+            "stationid in StationPermitTable, timeseries closed",
+        ),
+        (
+            20001,
+            0,
+            1,
+            true,
+            "stationid in StationPermitTable, timeseries open",
+        ),
+    ];
+
     let permit_tables = mock_permit_tables();
-    timeseries_is_open(permit_tables, station_id, type_id, permit_id).unwrap()
+    for case in cases {
+        let station_id = case.0;
+        let type_id = case.1;
+        let permit_id = case.2;
+        let expected = case.3;
+        let test_case = case.4;
+
+        let output =
+            timeseries_is_open(permit_tables.clone(), station_id, type_id, permit_id).unwrap();
+        assert_eq!(output, expected, "{}", test_case);
+    }
 }
 
 async fn cleanup(client: &tokio_postgres::Client) {
@@ -199,12 +236,36 @@ async fn e2e_test_wrapper<T: Future<Output = ()>>(test: T) {
     let manager = PostgresConnectionManager::new_from_stringlike(CONNECT_STRING, NoTls).unwrap();
     let db_pool = bb8::Pool::builder().build(manager).await.unwrap();
 
-    let api_server = tokio::spawn(lard_api::run(db_pool.clone()));
-    let ingestor = tokio::spawn(lard_ingestion::run(
-        db_pool.clone(),
+    let (init_shutdown_tx, mut init_shutdown_rx1) = tokio::sync::broadcast::channel(1);
+    let mut init_shutdown_rx2 = init_shutdown_tx.subscribe();
+
+    let (api_shutdown_tx, api_shutdown_rx) = tokio::sync::oneshot::channel();
+    let (ingestor_shutdown_tx, ingestor_shutdown_rx) = tokio::sync::oneshot::channel();
+
+    let api_pool = db_pool.clone();
+    let ingestion_pool = db_pool.clone();
+
+    let api_server = tokio::spawn(async move {
+        tokio::select! {
+            output = lard_api::run(api_pool) => output,
+            _ = init_shutdown_rx1.recv() => {
+                api_shutdown_tx.send(()).unwrap();
+                ()
+            },
+        }
+    });
+    let ingestor = tokio::spawn(async move {
+        tokio::select! {
+            output = lard_ingestion::run(ingestion_pool,
         PARAMCONV_CSV,
         mock_permit_tables(),
-    ));
+            ) => output,
+            _ = init_shutdown_rx2.recv() => {
+                ingestor_shutdown_tx.send(()).unwrap();
+                Ok(())
+            },
+        }
+    });
 
     tokio::select! {
         _ = api_server => panic!("API server task terminated first"),
@@ -220,6 +281,10 @@ async fn e2e_test_wrapper<T: Future<Output = ()>>(test: T) {
             assert!(test_result.is_ok())
         }
     }
+
+    init_shutdown_tx.send(()).unwrap();
+    api_shutdown_rx.await.unwrap();
+    ingestor_shutdown_rx.await.unwrap();
 }
 
 async fn ingest_data(client: &reqwest::Client, obsinn_msg: String) -> KldataResp {
@@ -238,7 +303,7 @@ async fn test_stations_endpoint_irregular() {
     e2e_test_wrapper(async {
         let ts = TestData {
             station_id: 20001,
-            params: &[Param::new("TGM"), Param::new("TGX")],
+            params: vec![Param::new("TGM"), Param::new("TGX")],
             start_time: Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap(),
             period: Duration::hours(1),
             type_id: 501,
@@ -270,140 +335,155 @@ async fn test_stations_endpoint_irregular() {
     .await
 }
 
-#[test_case(
-    TestData {
-        station_id: 20001,
-        params: &[Param::new("TA"), Param::new("TGX")],
-        start_time: Utc::now().duration_trunc(TimeDelta::hours(1)).unwrap()
-            - Duration::hours(11),
-        period: Duration::hours(1),
-        type_id: 501,
-        len: 12,
-    }; "Scalar params")
-]
-// TODO: probably write a separate test, so we can check actual sensor and level
-#[test_case(
-    TestData {
-        station_id: 20001,
-        params: &[Param::with_sensor_level("TA", (1, 1)), Param::new("TGX")],
-        start_time: Utc::now().duration_trunc(TimeDelta::hours(1)).unwrap()
-            - Duration::hours(11),
-        period: Duration::hours(1),
-        type_id: 501,
-        len: 12,
-    }; "With sensor and level")
-]
-#[test_case(
-    TestData {
-        station_id: 20001,
-        params: &[Param::new("KLOBS"), Param::new("TA")],
-        start_time: Utc::now().duration_trunc(TimeDelta::hours(1)).unwrap()
-            - Duration::hours(11),
-        period: Duration::hours(1),
-        type_id: 501,
-        len: 12,
-    }; "Scalar and non-scalar")
-]
 #[tokio::test]
-async fn test_stations_endpoint_regular(ts: TestData<'_>) {
-    e2e_test_wrapper(async {
-        let client = reqwest::Client::new();
-        let ingestor_resp = ingest_data(&client, ts.obsinn_message()).await;
-        assert_eq!(ingestor_resp.res, 0);
-
-        let resolution = "PT1H";
-        for param in ts.params {
-            let url = format!(
-                "http://localhost:3000/stations/{}/params/{}?time_resolution={}",
-                ts.station_id, param.id, resolution
-            );
-            let resp = reqwest::get(url).await.unwrap();
-            assert!(resp.status().is_success());
-
-            let json: TimeseriesResp = resp.json().await.unwrap();
-            assert_eq!(json.tseries.len(), 1);
-
-            let Timeseries::Regular(series) = &json.tseries[0] else {
-                panic!("Expected regular timeseries")
-            };
-            assert_eq!(series.data.len(), ts.len);
-        }
-    })
-    .await
-}
-
-#[test_case(99999, 211; "missing station")]
-#[test_case(20001, 999; "missing param")]
-#[tokio::test]
-async fn test_stations_endpoint_errors(station_id: i32, param_id: i32) {
-    e2e_test_wrapper(async {
-        let ts = TestData {
+async fn test_stations_endpoint_regular() {
+    let cases = vec![
+        // Scalar params
+        TestData {
             station_id: 20001,
-            params: &[Param::new("TA")],
-            start_time: Utc.with_ymd_and_hms(2024, 1, 1, 00, 00, 00).unwrap(),
+            params: vec![Param::new("TA"), Param::new("TGX")],
+            start_time: Utc::now().duration_trunc(TimeDelta::hours(1)).unwrap()
+                - Duration::hours(11),
             period: Duration::hours(1),
             type_id: 501,
-            len: 48,
-        };
+            len: 12,
+        },
+        // TODO: probably write a separate test, so we can check actual sensor and level
+        // With sensor and level
+        TestData {
+            station_id: 20001,
+            params: vec![Param::with_sensor_level("TA", (1, 1)), Param::new("TGX")],
+            start_time: Utc::now().duration_trunc(TimeDelta::hours(1)).unwrap()
+                - Duration::hours(11),
+            period: Duration::hours(1),
+            type_id: 501,
+            len: 12,
+        },
+        // Scalar and non-scalar
+        TestData {
+            station_id: 20001,
+            params: vec![Param::new("KLOBS"), Param::new("TA")],
+            start_time: Utc::now().duration_trunc(TimeDelta::hours(1)).unwrap()
+                - Duration::hours(11),
+            period: Duration::hours(1),
+            type_id: 501,
+            len: 12,
+        },
+    ];
 
-        let client = reqwest::Client::new();
-        let ingestor_resp = ingest_data(&client, ts.obsinn_message()).await;
-        assert_eq!(ingestor_resp.res, 0);
+    for ts in cases {
+        e2e_test_wrapper(async {
+            let client = reqwest::Client::new();
+            let ingestor_resp = ingest_data(&client, ts.obsinn_message()).await;
+            assert_eq!(ingestor_resp.res, 0);
 
-        for _ in ts.params {
-            let url = format!(
-                "http://localhost:3000/stations/{}/params/{}",
-                station_id, param_id
-            );
-            let resp = reqwest::get(url).await.unwrap();
-            // TODO: resp.status() returns 500, maybe it should return 404?
-            assert!(!resp.status().is_success());
-        }
-    })
-    .await
+            let resolution = "PT1H";
+            for param in ts.params {
+                let url = format!(
+                    "http://localhost:3000/stations/{}/params/{}?time_resolution={}",
+                    ts.station_id, param.id, resolution
+                );
+                let resp = reqwest::get(url).await.unwrap();
+                assert!(resp.status().is_success());
+
+                let json: TimeseriesResp = resp.json().await.unwrap();
+                assert_eq!(json.tseries.len(), 1);
+
+                let Timeseries::Regular(series) = &json.tseries[0] else {
+                    panic!("Expected regular timeseries")
+                };
+                assert_eq!(series.data.len(), ts.len);
+            }
+        })
+        .await
+    }
+}
+
+#[tokio::test]
+async fn test_stations_endpoint_errors() {
+    let cases = vec![
+        //missing station
+        (99999, 211),
+        //missing param
+        (20001, 999),
+    ];
+    for (station_id, param_id) in cases {
+        e2e_test_wrapper(async {
+            let ts = TestData {
+                station_id: 20001,
+                params: vec![Param::new("TA")],
+                start_time: Utc.with_ymd_and_hms(2024, 1, 1, 00, 00, 00).unwrap(),
+                period: Duration::hours(1),
+                type_id: 501,
+                len: 48,
+            };
+
+            let client = reqwest::Client::new();
+            let ingestor_resp = ingest_data(&client, ts.obsinn_message()).await;
+            assert_eq!(ingestor_resp.res, 0);
+
+            for _ in ts.params {
+                let url = format!(
+                    "http://localhost:3000/stations/{}/params/{}",
+                    station_id, param_id
+                );
+                let resp = reqwest::get(url).await.unwrap();
+                // TODO: resp.status() returns 500, maybe it should return 404?
+                assert!(!resp.status().is_success());
+            }
+        })
+        .await
+    }
 }
 
 // We insert 4 timeseries, 2 with new data (UTC::now()) and 2 with old data (2020)
-#[test_case("", 2; "without query")]
-#[test_case("?latest_max_age=2021-01-01T00:00:00Z", 2; "latest max age 1")]
-#[test_case("?latest_max_age=2019-01-01T00:00:00Z", 4; "latest max age 2")]
 #[tokio::test]
-async fn test_latest_endpoint(query: &str, n_timeseries_found: usize) {
-    e2e_test_wrapper(async {
-        let test_data = [
-            TestData {
-                station_id: 20001,
-                params: &[Param::new("TA"), Param::new("TGX")],
-                start_time: Utc::now().duration_trunc(TimeDelta::minutes(1)).unwrap()
-                    - Duration::hours(3),
-                period: Duration::minutes(1),
-                type_id: 508,
-                len: 180,
-            },
-            TestData {
-                station_id: 20002,
-                params: &[Param::new("TA"), Param::new("TGX")],
-                start_time: Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap(),
-                period: Duration::minutes(1),
-                type_id: 508,
-                len: 180,
-            },
-        ];
+async fn test_latest_endpoint() {
+    let cases = vec![
+        // without query
+        ("", 2),
+        // latest max age 1
+        ("?latest_max_age=2021-01-01T00:00:00Z", 2),
+        // latest max age 2
+        ("?latest_max_age=2019-01-01T00:00:00Z", 4),
+    ];
+    for (query, n_timeseries_found) in cases {
+        e2e_test_wrapper(async {
+            let test_data = [
+                TestData {
+                    station_id: 20001,
+                    params: vec![Param::new("TA"), Param::new("TGX")],
+                    start_time: Utc::now().duration_trunc(TimeDelta::minutes(1)).unwrap()
+                        - Duration::hours(3),
+                    period: Duration::minutes(1),
+                    type_id: 508,
+                    len: 180,
+                },
+                TestData {
+                    station_id: 20002,
+                    params: vec![Param::new("TA"), Param::new("TGX")],
+                    start_time: Utc.with_ymd_and_hms(2020, 1, 1, 0, 0, 0).unwrap(),
+                    period: Duration::minutes(1),
+                    type_id: 508,
+                    len: 180,
+                },
+            ];
 
-        let client = reqwest::Client::new();
-        for ts in test_data {
-            let ingestor_resp = ingest_data(&client, ts.obsinn_message()).await;
-            assert_eq!(ingestor_resp.res, 0);
-        }
+            let client = reqwest::Client::new();
+            for ts in test_data {
+                let ingestor_resp = ingest_data(&client, ts.obsinn_message()).await;
+                assert_eq!(ingestor_resp.res, 0);
+            }
 
-        let url = format!("http://localhost:3000/latest{}", query);
-        let resp = reqwest::get(url).await.unwrap();
-        assert!(resp.status().is_success());
+            let url = format!("http://localhost:3000/latest{}", query);
+            let resp = reqwest::get(url).await.unwrap();
+            assert!(resp.status().is_success());
 
-        let json: LatestResp = resp.json().await.unwrap();
-        assert_eq!(json.data.len(), n_timeseries_found);
-    })
-    .await
+            let json: LatestResp = resp.json().await.unwrap();
+            assert_eq!(json.data.len(), n_timeseries_found);
+        })
+        .await
+    }
 }
 
 #[tokio::test]
@@ -415,7 +495,7 @@ async fn test_timeslice_endpoint() {
         let test_data = [
             TestData {
                 station_id: 20001,
-                params: &params.clone(),
+                params: params.clone(),
                 start_time: timestamp - Duration::hours(1),
                 period: Duration::hours(1),
                 type_id: 501,
@@ -423,7 +503,7 @@ async fn test_timeslice_endpoint() {
             },
             TestData {
                 station_id: 20002,
-                params: &params.clone(),
+                params: params.clone(),
                 start_time: timestamp - Duration::hours(1),
                 period: Duration::minutes(1),
                 type_id: 508,
@@ -481,7 +561,7 @@ async fn test_kafka() {
         tokio::spawn(async move {
             let ts = TestData {
                 station_id: 20001,
-                params: &[Param::new("RR_1")], // sum(precipitation_amount PT1H)
+                params: vec![Param::new("RR_1")], // sum(precipitation_amount PT1H)
                 start_time: Utc.with_ymd_and_hms(2024, 6, 5, 12, 0, 0).unwrap(),
                 period: chrono::Duration::hours(1),
                 type_id: -4,
@@ -535,19 +615,17 @@ async fn test_kafka() {
     .await
 }
 
-#[test_case(
-    TestData {
+#[tokio::test]
+async fn test_rove_connector() {
+    let ts = TestData {
         station_id: 20001,
-        params: &[Param::new("TA"), Param::new("TGX")],
-        start_time: Utc::now().duration_trunc(TimeDelta::hours(1)).unwrap()
-            - Duration::hours(11),
+        params: vec![Param::new("TA"), Param::new("TGX")],
+        start_time: Utc::now().duration_trunc(TimeDelta::hours(1)).unwrap() - Duration::hours(11),
         period: Duration::hours(1),
         type_id: 501,
         len: 12,
-    }; "Scalar params")
-]
-#[tokio::test]
-async fn test_rove_connector(ts: TestData<'_>) {
+    };
+
     e2e_test_wrapper(async {
         let client = reqwest::Client::new();
 
