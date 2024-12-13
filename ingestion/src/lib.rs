@@ -7,7 +7,6 @@ use axum::{
 use bb8::PooledConnection;
 use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Utc};
-use chronoutil::RelativeDuration;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use rove::data_switch::{SpaceSpec, TimeSpec, Timestamp};
@@ -111,16 +110,19 @@ pub enum ObsType<'a> {
     NonScalar(&'a str),
 }
 
-/// Generic container for a piece of data ready to be inserted into the DB
 pub struct Datum<'a> {
     timeseries_id: i32,
     // needed for QC
     param_id: i32,
-    timestamp: DateTime<Utc>,
     value: ObsType<'a>,
 }
 
-pub type Data<'a> = Vec<Datum<'a>>;
+/// Generic container for a piece of data ready to be inserted into the DB
+pub struct DataChunk<'a> {
+    timestamp: DateTime<Utc>,
+    time_resolution: chronoutil::RelativeDuration,
+    data: Vec<Datum<'a>>,
+}
 
 pub struct QcResult {
     timeseries_id: i32,
@@ -133,7 +135,10 @@ pub struct QcResult {
 }
 
 // TODO: benchmark insertion of scalar and non-scalar together vs separately?
-pub async fn insert_data(data: &Data<'_>, conn: &mut PooledPgConn<'_>) -> Result<(), Error> {
+pub async fn insert_data(
+    chunks: &Vec<DataChunk<'_>>,
+    conn: &mut PooledPgConn<'_>,
+) -> Result<(), Error> {
     // TODO: the conflict resolution on this query is an imperfect solution, and needs improvement
     //
     // I learned from Søren that obsinn and kvalobs organise updates and deletions by sending new
@@ -164,37 +169,41 @@ pub async fn insert_data(data: &Data<'_>, conn: &mut PooledPgConn<'_>) -> Result
         )
         .await?;
 
-    let mut futures = data
-        .iter()
-        .map(|datum| async {
-            match &datum.value {
-                ObsType::Scalar(val) => {
-                    conn.execute(
-                        &query_scalar,
-                        &[&datum.timeseries_id, &datum.timestamp, &val],
-                    )
-                    .await
+    // TODO: should we flat map into one FuturesUnordered instead of for looping?
+    for chunk in chunks {
+        let mut futures = chunk
+            .data
+            .iter()
+            .map(|datum| async {
+                match &datum.value {
+                    ObsType::Scalar(val) => {
+                        conn.execute(
+                            &query_scalar,
+                            &[&datum.timeseries_id, &chunk.timestamp, &val],
+                        )
+                        .await
+                    }
+                    ObsType::NonScalar(val) => {
+                        conn.execute(
+                            &query_nonscalar,
+                            &[&datum.timeseries_id, &chunk.timestamp, &val],
+                        )
+                        .await
+                    }
                 }
-                ObsType::NonScalar(val) => {
-                    conn.execute(
-                        &query_nonscalar,
-                        &[&datum.timeseries_id, &datum.timestamp, &val],
-                    )
-                    .await
-                }
-            }
-        })
-        .collect::<FuturesUnordered<_>>();
+            })
+            .collect::<FuturesUnordered<_>>();
 
-    while let Some(res) = futures.next().await {
-        res?;
+        while let Some(res) = futures.next().await {
+            res?;
+        }
     }
 
     Ok(())
 }
 
 pub async fn qc_data(
-    data: &Data<'_>,
+    chunks: &Vec<DataChunk<'_>>,
     scheduler: &rove::Scheduler,
     conn: &mut PooledPgConn<'_>,
 ) -> Result<(), Error> {
@@ -224,49 +233,51 @@ pub async fn qc_data(
         )
         .await?;
 
-    let mut qc_results: Vec<QcResult> = Vec::with_capacity(data.len());
-    for datum in data {
-        let time_spec = TimeSpec::new(
-            Timestamp(datum.timestamp.timestamp()),
-            Timestamp(datum.timestamp.timestamp()),
-            // TODO: real time resolution here. For now derive from type_id?
-            RelativeDuration::hours(1),
-        );
-        let space_spec = SpaceSpec::One(datum.timeseries_id.to_string());
-        // TODO: load and fetch real pipeline
-        let pipeline = "sample_pipeline";
-        let rove_output = scheduler
-            .validate_direct(
-                "lard",
-                &[] as &[&str],
-                &time_spec,
-                &space_spec,
-                pipeline,
-                None,
-            )
-            .await?;
+    let mut qc_results: Vec<QcResult> = Vec::new();
+    for chunk in chunks {
+        let timestamp = chunk.timestamp.timestamp();
+        for datum in chunk.data.iter() {
+            let time_spec = TimeSpec::new(
+                Timestamp(timestamp),
+                Timestamp(timestamp),
+                chunk.time_resolution,
+            );
+            let space_spec = SpaceSpec::One(datum.timeseries_id.to_string());
+            // TODO: load and fetch real pipeline
+            let pipeline = "sample_pipeline";
+            let rove_output = scheduler
+                .validate_direct(
+                    "lard",
+                    &[] as &[&str],
+                    &time_spec,
+                    &space_spec,
+                    pipeline,
+                    None,
+                )
+                .await?;
 
-        let first_fail = rove_output.iter().find(|check_result| {
-            if let Some(result) = check_result.results.first() {
-                if let Some(flag) = result.values.first() {
-                    return *flag == rove::Flag::Fail;
+            let first_fail = rove_output.iter().find(|check_result| {
+                if let Some(result) = check_result.results.first() {
+                    if let Some(flag) = result.values.first() {
+                        return *flag == rove::Flag::Fail;
+                    }
                 }
-            }
-            false
-        });
+                false
+            });
 
-        let (flag, fail_condition) = match first_fail {
-            Some(check_result) => (1, Some(check_result.check.clone())),
-            None => (0, None),
-        };
+            let (flag, fail_condition) = match first_fail {
+                Some(check_result) => (1, Some(check_result.check.clone())),
+                None => (0, None),
+            };
 
-        qc_results.push(QcResult {
-            timeseries_id: datum.timeseries_id,
-            timestamp: datum.timestamp,
-            pipeline: pipeline.to_string(),
-            flag,
-            fail_condition,
-        });
+            qc_results.push(QcResult {
+                timeseries_id: datum.timeseries_id,
+                timestamp: chunk.timestamp,
+                pipeline: pipeline.to_string(),
+                flag,
+                fail_condition,
+            });
+        }
     }
 
     let mut futures = qc_results

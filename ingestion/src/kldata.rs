@@ -1,8 +1,9 @@
 use crate::{
     permissions::{timeseries_is_open, ParamPermitTable, StationPermitTable},
-    Datum, Error, ObsType, PooledPgConn, ReferenceParam,
+    DataChunk, Datum, Error, ObsType, PooledPgConn, ReferenceParam,
 };
 use chrono::{DateTime, NaiveDateTime, Utc};
+use chronoutil::RelativeDuration;
 use regex::Regex;
 use std::{
     collections::HashMap,
@@ -18,17 +19,12 @@ pub struct ObsinnChunk<'a> {
     observations: Vec<ObsinnObs<'a>>,
     station_id: i32, // TODO: change name here to nationalnummer?
     type_id: i32,
+    timestamp: DateTime<Utc>,
 }
 
 /// Represents a single observation from an obsinn message
 #[derive(Debug, PartialEq)]
 pub struct ObsinnObs<'a> {
-    // TODO: this timestamp is shared by all obs in the row, maybe we should have
-    // a Vec<ObsType> here and remove the Vec<ObsinnObs> from ObsinnChunk
-    // NOTE: this struct maps to Datum, the type used during insertion that should take into
-    // account all possible sources. While the proposed TODO would perfectly fit Obsinn, we would
-    // also need to change Datum accordingly, which might not work well for other sources.
-    timestamp: DateTime<Utc>,
     id: ObsinnId,
     value: ObsType<'a>,
 }
@@ -153,11 +149,13 @@ fn parse_obs<'a>(
     csv_body: Lines<'a>,
     columns: &[ObsinnId],
     reference_params: Arc<HashMap<String, ReferenceParam>>,
-) -> Result<Vec<ObsinnObs<'a>>, Error> {
-    let mut obs = Vec::new();
+    header: ObsinnHeader<'a>,
+) -> Result<Vec<ObsinnChunk<'a>>, Error> {
+    let mut chunks = Vec::new();
     let row_is_empty = || Error::Parse("empty row in kldata csv".to_string());
 
     for row in csv_body {
+        let mut obs = Vec::new();
         let (timestamp, vals) = {
             let mut vals = row.split(',');
 
@@ -201,25 +199,29 @@ fn parse_obs<'a>(
                 }
             };
 
-            obs.push(ObsinnObs {
-                timestamp,
-                id: col,
-                value,
-            })
+            obs.push(ObsinnObs { id: col, value })
         }
+
+        // TODO: should this be more resiliant?
+        if obs.is_empty() {
+            return Err(row_is_empty());
+        }
+
+        chunks.push(ObsinnChunk {
+            observations: obs,
+            station_id: header.station_id,
+            type_id: header.type_id,
+            timestamp,
+        })
     }
 
-    if obs.is_empty() {
-        return Err(row_is_empty());
-    }
-
-    Ok(obs)
+    Ok(chunks)
 }
 
 pub fn parse_kldata(
     msg: &str,
     reference_params: Arc<HashMap<String, ReferenceParam>>,
-) -> Result<(usize, ObsinnChunk), Error> {
+) -> Result<(usize, Vec<ObsinnChunk>), Error> {
     let (header, columns, csv_body) = {
         let mut csv_body = msg.lines();
         let lines_err = || Error::Parse("kldata message contained too few lines".to_string());
@@ -234,22 +236,23 @@ pub fn parse_kldata(
 
     Ok((
         header.message_id,
-        ObsinnChunk {
-            observations: parse_obs(csv_body, &columns, reference_params)?,
-            station_id: header.station_id,
-            type_id: header.type_id,
-        },
+        parse_obs(csv_body, &columns, reference_params, header)?, // ObsinnChunk {
+                                                                  //     observations: parse_obs(csv_body, &columns, reference_params)?,
+                                                                  //     station_id: header.station_id,
+                                                                  //     type_id: header.type_id,
+                                                                  //     timestamp:,
+                                                                  // },
     ))
 }
 
 // TODO: rewrite such that queries can be pipelined?
 // not pipelining here hurts latency, but shouldn't matter for throughput
 pub async fn filter_and_label_kldata<'a>(
-    chunk: ObsinnChunk<'a>,
+    chunks: Vec<ObsinnChunk<'a>>,
     conn: &mut PooledPgConn<'_>,
     param_conversions: Arc<HashMap<String, ReferenceParam>>,
     permit_table: Arc<RwLock<(ParamPermitTable, StationPermitTable)>>,
-) -> Result<Vec<Datum<'a>>, Error> {
+) -> Result<Vec<DataChunk<'a>>, Error> {
     let query_get_obsinn = conn
         .prepare(
             "SELECT timeseries \
@@ -262,117 +265,125 @@ pub async fn filter_and_label_kldata<'a>(
         )
         .await?;
 
-    let mut data = Vec::with_capacity(chunk.observations.len());
+    let mut out_chunks = Vec::with_capacity(chunks.len());
+    for chunk in chunks {
+        let mut data = Vec::with_capacity(chunk.observations.len());
 
-    for in_datum in chunk.observations {
-        // get the conversion first, so we avoid wasting a tsid if it doesn't exist
-        let param = param_conversions
-            .get(&in_datum.id.param_code)
-            .ok_or_else(|| {
-                Error::Parse(format!(
-                    "unrecognised param_code '{}'",
-                    in_datum.id.param_code
-                ))
-            })?;
+        for in_datum in chunk.observations {
+            // get the conversion first, so we avoid wasting a tsid if it doesn't exist
+            let param = param_conversions
+                .get(&in_datum.id.param_code)
+                .ok_or_else(|| {
+                    Error::Parse(format!(
+                        "unrecognised param_code '{}'",
+                        in_datum.id.param_code
+                    ))
+                })?;
 
-        // TODO: we only need to check inside this loop if station_id is in the
-        // param_permit_table
-        if !timeseries_is_open(
-            permit_table.clone(),
-            chunk.station_id,
-            chunk.type_id,
-            param.id,
-        )? {
-            // TODO: log that the timeseries is closed? Mostly useful for tests
-            #[cfg(feature = "integration_tests")]
-            eprintln!("station {}: timeseries is closed", chunk.station_id);
-            continue;
-        }
+            // TODO: we only need to check inside this loop if station_id is in the
+            // param_permit_table
+            if !timeseries_is_open(
+                permit_table.clone(),
+                chunk.station_id,
+                chunk.type_id,
+                param.id,
+            )? {
+                // TODO: log that the timeseries is closed? Mostly useful for tests
+                #[cfg(feature = "integration_tests")]
+                eprintln!("station {}: timeseries is closed", chunk.station_id);
+                continue;
+            }
 
-        let transaction = conn.transaction().await?;
+            let transaction = conn.transaction().await?;
 
-        let (sensor, lvl) = in_datum
-            .id
-            .sensor_and_level
-            .map(|both| (Some(both.0), Some(both.1)))
-            .unwrap_or((None, None));
+            let (sensor, lvl) = in_datum
+                .id
+                .sensor_and_level
+                .map(|both| (Some(both.0), Some(both.1)))
+                .unwrap_or((None, None));
 
-        let obsinn_label_result = transaction
-            .query_opt(
-                &query_get_obsinn,
-                &[
-                    &chunk.station_id,
-                    &chunk.type_id,
-                    &in_datum.id.param_code,
-                    &lvl,
-                    &sensor,
-                ],
-            )
-            .await?;
+            let obsinn_label_result = transaction
+                .query_opt(
+                    &query_get_obsinn,
+                    &[
+                        &chunk.station_id,
+                        &chunk.type_id,
+                        &in_datum.id.param_code,
+                        &lvl,
+                        &sensor,
+                    ],
+                )
+                .await?;
 
-        let timeseries_id: i32 = match obsinn_label_result {
-            Some(row) => row.get(0),
-            None => {
-                // create new timeseries
-                // TODO: currently we create a timeseries with null location
-                // In the future the location column should be moved to the timeseries metadata table
-                let timeseries_id = transaction
-                    .query_one(
-                        "INSERT INTO public.timeseries (fromtime) VALUES ($1) RETURNING id",
-                        &[&in_datum.timestamp],
-                    )
-                    .await?
-                    .get(0);
+            let timeseries_id: i32 = match obsinn_label_result {
+                Some(row) => row.get(0),
+                None => {
+                    // create new timeseries
+                    // TODO: currently we create a timeseries with null location
+                    // In the future the location column should be moved to the timeseries metadata table
+                    let timeseries_id = transaction
+                        .query_one(
+                            "INSERT INTO public.timeseries (fromtime) VALUES ($1) RETURNING id",
+                            &[&chunk.timestamp],
+                        )
+                        .await?
+                        .get(0);
 
-                // create obsinn label
-                transaction
-                    .execute(
-                        "INSERT INTO labels.obsinn \
+                    // create obsinn label
+                    transaction
+                        .execute(
+                            "INSERT INTO labels.obsinn \
                                 (timeseries, nationalnummer, type_id, param_code, lvl, sensor) \
                             VALUES ($1, $2, $3, $4, $5, $6)",
-                        &[
-                            &timeseries_id,
-                            &chunk.station_id,
-                            &chunk.type_id,
-                            &in_datum.id.param_code,
-                            &lvl,
-                            &sensor,
-                        ],
-                    )
-                    .await?;
+                            &[
+                                &timeseries_id,
+                                &chunk.station_id,
+                                &chunk.type_id,
+                                &in_datum.id.param_code,
+                                &lvl,
+                                &sensor,
+                            ],
+                        )
+                        .await?;
 
-                // create met label
-                transaction
-                    .execute(
-                        "INSERT INTO labels.met \
+                    // create met label
+                    transaction
+                        .execute(
+                            "INSERT INTO labels.met \
                                 (timeseries, station_id, param_id, type_id, lvl, sensor) \
                             VALUES ($1, $2, $3, $4, $5, $6)",
-                        &[
-                            &timeseries_id,
-                            &chunk.station_id,
-                            &param.id,
-                            &chunk.type_id,
-                            &lvl,
-                            &sensor,
-                        ],
-                    )
-                    .await?;
+                            &[
+                                &timeseries_id,
+                                &chunk.station_id,
+                                &param.id,
+                                &chunk.type_id,
+                                &lvl,
+                                &sensor,
+                            ],
+                        )
+                        .await?;
 
-                timeseries_id
-            }
-        };
+                    timeseries_id
+                }
+            };
 
-        transaction.commit().await?;
+            transaction.commit().await?;
 
-        data.push(Datum {
-            timeseries_id,
-            param_id: param.id,
-            timestamp: in_datum.timestamp,
-            value: in_datum.value,
+            data.push(Datum {
+                timeseries_id,
+                param_id: param.id,
+                value: in_datum.value,
+            });
+        }
+        out_chunks.push(DataChunk {
+            timestamp: chunk.timestamp,
+            // TODO: real time_resolution (derive from type_id for now)
+            time_resolution: RelativeDuration::hours(1),
+            data,
         });
     }
 
-    Ok(data)
+    Ok(out_chunks)
 }
 
 #[cfg(test)]
@@ -527,32 +538,40 @@ mod tests {
                         sensor_and_level: None,
                     },
                 ],
-                Ok(vec![
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "TA".to_string(),
-                            sensor_and_level: None,
+                ObsinnHeader {
+                    station_id: 18700,
+                    type_id: 511,
+                    message_id: 1,
+                    _received_time: None,
+                },
+                Ok(vec![ObsinnChunk {
+                    observations: vec![
+                        ObsinnObs {
+                            id: ObsinnId {
+                                param_code: "TA".to_string(),
+                                sensor_and_level: None,
+                            },
+                            value: Scalar(-1.1),
                         },
-                        value: Scalar(-1.1),
-                    },
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "CI".to_string(),
-                            sensor_and_level: None,
+                        ObsinnObs {
+                            id: ObsinnId {
+                                param_code: "CI".to_string(),
+                                sensor_and_level: None,
+                            },
+                            value: Scalar(0.0),
                         },
-                        value: Scalar(0.0),
-                    },
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "IR".to_string(),
-                            sensor_and_level: None,
+                        ObsinnObs {
+                            id: ObsinnId {
+                                param_code: "IR".to_string(),
+                                sensor_and_level: None,
+                            },
+                            value: Scalar(2.8),
                         },
-                        value: Scalar(2.8),
-                    },
-                ]),
+                    ],
+                    timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
+                    station_id: 18700,
+                    type_id: 511,
+                }]),
                 "single line",
             ),
             (
@@ -571,54 +590,68 @@ mod tests {
                         sensor_and_level: None,
                     },
                 ],
+                ObsinnHeader {
+                    station_id: 18700,
+                    type_id: 511,
+                    message_id: 1,
+                    _received_time: None,
+                },
                 Ok(vec![
-                    ObsinnObs {
+                    ObsinnChunk {
+                        observations: vec![
+                            ObsinnObs {
+                                id: ObsinnId {
+                                    param_code: "TA".to_string(),
+                                    sensor_and_level: None,
+                                },
+                                value: Scalar(-1.1),
+                            },
+                            ObsinnObs {
+                                id: ObsinnId {
+                                    param_code: "CI".to_string(),
+                                    sensor_and_level: None,
+                                },
+                                value: Scalar(0.0),
+                            },
+                            ObsinnObs {
+                                id: ObsinnId {
+                                    param_code: "IR".to_string(),
+                                    sensor_and_level: None,
+                                },
+                                value: Scalar(2.8),
+                            },
+                        ],
                         timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "TA".to_string(),
-                            sensor_and_level: None,
-                        },
-                        value: Scalar(-1.1),
+                        station_id: 18700,
+                        type_id: 511,
                     },
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "CI".to_string(),
-                            sensor_and_level: None,
-                        },
-                        value: Scalar(0.0),
-                    },
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "IR".to_string(),
-                            sensor_and_level: None,
-                        },
-                        value: Scalar(2.8),
-                    },
-                    ObsinnObs {
+                    ObsinnChunk {
+                        observations: vec![
+                            ObsinnObs {
+                                id: ObsinnId {
+                                    param_code: "TA".to_string(),
+                                    sensor_and_level: None,
+                                },
+                                value: Scalar(-1.5),
+                            },
+                            ObsinnObs {
+                                id: ObsinnId {
+                                    param_code: "CI".to_string(),
+                                    sensor_and_level: None,
+                                },
+                                value: Scalar(1.0),
+                            },
+                            ObsinnObs {
+                                id: ObsinnId {
+                                    param_code: "IR".to_string(),
+                                    sensor_and_level: None,
+                                },
+                                value: Scalar(2.9),
+                            },
+                        ],
                         timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 51, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "TA".to_string(),
-                            sensor_and_level: None,
-                        },
-                        value: Scalar(-1.5),
-                    },
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 51, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "CI".to_string(),
-                            sensor_and_level: None,
-                        },
-                        value: Scalar(1.0),
-                    },
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 51, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "IR".to_string(),
-                            sensor_and_level: None,
-                        },
-                        value: Scalar(2.9),
+                        station_id: 18700,
+                        type_id: 511,
                     },
                 ]),
                 "multiple lines",
@@ -635,24 +668,33 @@ mod tests {
                         sensor_and_level: None,
                     },
                 ],
-                Ok(vec![
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "KLOBS".to_string(),
-                            sensor_and_level: None,
+                ObsinnHeader {
+                    station_id: 18700,
+                    type_id: 511,
+                    message_id: 1,
+                    _received_time: None,
+                },
+                Ok(vec![ObsinnChunk {
+                    observations: vec![
+                        ObsinnObs {
+                            id: ObsinnId {
+                                param_code: "KLOBS".to_string(),
+                                sensor_and_level: None,
+                            },
+                            value: NonScalar("20240910000000"),
                         },
-                        value: NonScalar("20240910000000"),
-                    },
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "TA".to_string(),
-                            sensor_and_level: None,
+                        ObsinnObs {
+                            id: ObsinnId {
+                                param_code: "TA".to_string(),
+                                sensor_and_level: None,
+                            },
+                            value: Scalar(10.1),
                         },
-                        value: Scalar(10.1),
-                    },
-                ]),
+                    ],
+                    timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
+                    station_id: 18700,
+                    type_id: 511,
+                }]),
                 "non scalar parameter",
             ),
             (
@@ -667,31 +709,40 @@ mod tests {
                         sensor_and_level: None,
                     },
                 ],
-                Ok(vec![
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "unknown".to_string(),
-                            sensor_and_level: None,
+                ObsinnHeader {
+                    station_id: 18700,
+                    type_id: 511,
+                    message_id: 1,
+                    _received_time: None,
+                },
+                Ok(vec![ObsinnChunk {
+                    observations: vec![
+                        ObsinnObs {
+                            id: ObsinnId {
+                                param_code: "unknown".to_string(),
+                                sensor_and_level: None,
+                            },
+                            value: NonScalar("20240910000000"),
                         },
-                        value: NonScalar("20240910000000"),
-                    },
-                    ObsinnObs {
-                        timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                        id: ObsinnId {
-                            param_code: "TA".to_string(),
-                            sensor_and_level: None,
+                        ObsinnObs {
+                            id: ObsinnId {
+                                param_code: "TA".to_string(),
+                                sensor_and_level: None,
+                            },
+                            value: Scalar(10.1),
                         },
-                        value: Scalar(10.1),
-                    },
-                ]),
+                    ],
+                    timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
+                    station_id: 18700,
+                    type_id: 511,
+                }]),
                 "unrecognised param code",
             ),
         ];
 
         let param_conversions = get_conversions("resources/paramconversions.csv").unwrap();
-        for (data, cols, expected, case_description) in cases {
-            let output = parse_obs(data.lines(), &cols, param_conversions.clone());
+        for (data, cols, header, expected, case_description) in cases {
+            let output = parse_obs(data.lines(), &cols, param_conversions.clone(), header);
             assert_eq!(output, expected, "{}", case_description);
         }
     }
