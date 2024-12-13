@@ -378,203 +378,353 @@ pub async fn filter_and_label_kldata<'a>(
 mod tests {
     use crate::get_conversions;
     use chrono::TimeZone;
-    use test_case::test_case;
 
     use super::ObsType::{NonScalar, Scalar};
     use super::*;
 
-    #[test_case(
-        "Test message that fails." => Err(Error::Parse("kldata indicator missing or out of order".to_string()));
-        "missing kldata indicator"
-    )]
-    // TODO: missing messageid defaults to 0
-    #[test_case(
-        "kldata/nationalnr=100/type=504" => Ok((100, 504, 0));
-        "valid header 1"
-    )]
-    #[test_case(
-        "kldata/type=504/nationalnr=100/messageid=25" => Ok((100, 504, 25));
-        "valid header 2"
-    )]
-    #[test_case(
-        "kldata/messageid=23/nationalnr=99993/type=508/add" => Ok((99993, 508, 23));
-        "valid header 3"
-    )]
-    #[test_case(
-        "kldata/received_time=\"2024-07-05 08:27:40+00\"/nationalnr=297000/type=70051" => Ok((297000, 70051, 0));
-        "valid header 4"
-    )]
-    #[test_case(
-        "kldata/nationalnr=93140/type=501/unexpected" => Err(Error::Parse("unexpected field in kldata header format: unexpected".to_string()));
-        "unexpected field"
-    )]
-    #[test_case(
-        "kldata/messageid=10/type=501" => Err(Error::Parse("missing field `nationalnr` in kldata header".to_string()));
-        "missing nationlnr"
-    )]
-    #[test_case(
-        "kldata/messageid=10/nationalnr=93140" => Err(Error::Parse("missing field `type` in kldata header".to_string()));
-        "missing type"
-    )]
-    fn test_parse_meta(msg: &str) -> Result<(i32, i32, usize), Error> {
-        let header = ObsinnHeader::parse(msg)?;
-
-        Ok((header.station_id, header.type_id, header.message_id))
+    #[test]
+    fn test_parse_meta() {
+        let cases = vec![
+            (
+                "Test message that fails.",
+                Err(Error::Parse(
+                    "kldata indicator missing or out of order".to_string(),
+                )),
+                "missing kldata indicator",
+            ),
+            // TODO: missing messageid defaults to 0
+            (
+                "kldata/nationalnr=100/type=504",
+                Ok((100, 504, 0)),
+                "valid header 1",
+            ),
+            (
+                "kldata/type=504/nationalnr=100/messageid=25",
+                Ok((100, 504, 25)),
+                "valid header 2",
+            ),
+            (
+                "kldata/messageid=23/nationalnr=99993/type=508/add",
+                Ok((99993, 508, 23)),
+                "valid header 3",
+            ),
+            (
+                "kldata/received_time=\"2024-07-05 08:27:40+00\"/nationalnr=297000/type=70051",
+                Ok((297000, 70051, 0)),
+                "valid header 4",
+            ),
+            (
+                "kldata/nationalnr=93140/type=501/unexpected",
+                Err(Error::Parse(
+                    "unexpected field in kldata header format: unexpected".to_string(),
+                )),
+                "unexpected field",
+            ),
+            (
+                "kldata/messageid=10/type=501",
+                Err(Error::Parse(
+                    "missing field `nationalnr` in kldata header".to_string(),
+                )),
+                "missing nationlnr",
+            ),
+            (
+                "kldata/messageid=10/nationalnr=93140",
+                Err(Error::Parse(
+                    "missing field `type` in kldata header".to_string(),
+                )),
+                "missing type",
+            ),
+        ];
+        for (msg, expected, case_description) in cases {
+            let output = ObsinnHeader::parse(msg)
+                .map(|header| (header.station_id, header.type_id, header.message_id));
+            assert_eq!(output, expected, "{}", case_description);
+        }
     }
 
-    #[test_case(
-        "KLOBS,QSI_01(0,0)" => Ok(vec![
-            ObsinnId{param_code: "KLOBS".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "QSI_01".to_string(), sensor_and_level: Some((0,0))}
-        ]);
-        "match 1"
-    )]
-    #[test_case(
-        "param_1,param_2,QSI_01(0,0)" => Ok(vec![
-            ObsinnId{param_code: "param_1".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "param_2".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "QSI_01".to_string(), sensor_and_level: Some((0,0))}
-        ]);
-        "match 2"
-    )]
-    #[test_case(
-        "param_1(0,0),param_2,param_3(0,0)" => Ok(vec![
-            ObsinnId{param_code: "param_1".to_string(), sensor_and_level: Some((0,0))},
-            ObsinnId{param_code: "param_2".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "param_3".to_string(), sensor_and_level: Some((0,0))}
-        ]);
-        "match 3"
-    )]
     // NOTE: cases not taken into account here
     // - "()"             => Vec::new()
     // - "param(0.1,0)" => vec[param, 0.1, 0]
     // - "param(0,0.1)" => vec[param, 0.1, 0]
-    fn test_parse_columns(cols: &str) -> Result<Vec<ObsinnId>, Error> {
-        parse_columns(cols)
+    #[test]
+    fn test_parse_columns() {
+        let cases = vec![
+            (
+                "KLOBS,QSI_01(0,0)",
+                Ok(vec![
+                    ObsinnId {
+                        param_code: "KLOBS".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "QSI_01".to_string(),
+                        sensor_and_level: Some((0, 0)),
+                    },
+                ]),
+                "match 1",
+            ),
+            (
+                "param_1,param_2,QSI_01(0,0)",
+                Ok(vec![
+                    ObsinnId {
+                        param_code: "param_1".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "param_2".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "QSI_01".to_string(),
+                        sensor_and_level: Some((0, 0)),
+                    },
+                ]),
+                "match 2",
+            ),
+            (
+                "param_1(0,0),param_2,param_3(0,0)",
+                Ok(vec![
+                    ObsinnId {
+                        param_code: "param_1".to_string(),
+                        sensor_and_level: Some((0, 0)),
+                    },
+                    ObsinnId {
+                        param_code: "param_2".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "param_3".to_string(),
+                        sensor_and_level: Some((0, 0)),
+                    },
+                ]),
+                "match 3",
+            ),
+        ];
+
+        for (cols, expected, case_description) in cases {
+            let output = parse_columns(cols);
+            assert_eq!(output, expected, "{}", case_description);
+        }
     }
 
-    #[test_case(
-        "20160201054100,-1.1,0,2.80",
-        &[
-            ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "CI".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "IR".to_string(), sensor_and_level: None},
-        ] => Ok(vec![
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None}, 
-                value: Scalar(-1.1)
-            },
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "CI".to_string(), sensor_and_level: None}, 
-                value: Scalar(0.0)
-            },
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "IR".to_string(), sensor_and_level: None}, 
-                value: Scalar(2.8)
-            },
-        ]);
-        "single line"
-    )]
-    #[test_case(
-        "20160201054100,-1.1,0,2.80\n20160201055100,-1.5,1,2.90",
-        &[
-            ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "CI".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "IR".to_string(), sensor_and_level: None},
-        ] => Ok(vec![
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None}, 
-                value: Scalar(-1.1)
-            },
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "CI".to_string(), sensor_and_level: None}, 
-                value: Scalar(0.0)
-            },
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 41, 0).unwrap(),
-                id: ObsinnId{param_code: "IR".to_string(), sensor_and_level: None}, 
-                value: Scalar(2.8)
-            },
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 51, 0).unwrap(),
-                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None}, 
-                value: Scalar(-1.5)
-            },
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 51, 0).unwrap(),
-                id: ObsinnId{param_code: "CI".to_string(), sensor_and_level: None}, 
-                value: Scalar(1.0)
-            },
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2016,2, 1, 5, 51, 0).unwrap(),
-                id: ObsinnId{param_code: "IR".to_string(), sensor_and_level: None}, 
-                value: Scalar(2.9)
-            },
-        ]);
-        "multiple lines"
-    )]
-    #[test_case("20240910000000,20240910000000,10.1",
-        &[
-            ObsinnId{param_code: "KLOBS".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
-        ] => Ok(vec![
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                id: ObsinnId{param_code: "KLOBS".to_string(), sensor_and_level: None}, 
-                value: NonScalar("20240910000000") 
-            },
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None}, 
-                value: Scalar(10.1)
-            }]
-        );
-        "non scalar parameter"
-    )]
-    #[test_case("20240910000000,20240910000000,10.1",
-        &[
-            ObsinnId{param_code: "unknown".to_string(), sensor_and_level: None},
-            ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
-        ] => Ok(vec![
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                id: ObsinnId{param_code: "unknown".to_string(), sensor_and_level: None}, 
-                value: NonScalar("20240910000000") 
-            },
-            ObsinnObs{
-                timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
-                id: ObsinnId{param_code: "TA".to_string(), sensor_and_level: None},
-                value: Scalar(10.1)
-            },
-        ]);
-        "unrecognised param code"
-    )]
-    fn test_parse_obs<'a>(data: &'a str, cols: &[ObsinnId]) -> Result<Vec<ObsinnObs<'a>>, Error> {
+    #[test]
+    fn test_parse_obs<'a>() {
+        let cases = vec![
+            (
+                "20160201054100,-1.1,0,2.80",
+                vec![
+                    ObsinnId {
+                        param_code: "TA".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "CI".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "IR".to_string(),
+                        sensor_and_level: None,
+                    },
+                ],
+                Ok(vec![
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "TA".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(-1.1),
+                    },
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "CI".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(0.0),
+                    },
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "IR".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(2.8),
+                    },
+                ]),
+                "single line",
+            ),
+            (
+                "20160201054100,-1.1,0,2.80\n20160201055100,-1.5,1,2.90",
+                vec![
+                    ObsinnId {
+                        param_code: "TA".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "CI".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "IR".to_string(),
+                        sensor_and_level: None,
+                    },
+                ],
+                Ok(vec![
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "TA".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(-1.1),
+                    },
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "CI".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(0.0),
+                    },
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 41, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "IR".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(2.8),
+                    },
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 51, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "TA".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(-1.5),
+                    },
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 51, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "CI".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(1.0),
+                    },
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2016, 2, 1, 5, 51, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "IR".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(2.9),
+                    },
+                ]),
+                "multiple lines",
+            ),
+            (
+                "20240910000000,20240910000000,10.1",
+                vec![
+                    ObsinnId {
+                        param_code: "KLOBS".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "TA".to_string(),
+                        sensor_and_level: None,
+                    },
+                ],
+                Ok(vec![
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "KLOBS".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: NonScalar("20240910000000"),
+                    },
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "TA".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(10.1),
+                    },
+                ]),
+                "non scalar parameter",
+            ),
+            (
+                "20240910000000,20240910000000,10.1",
+                vec![
+                    ObsinnId {
+                        param_code: "unknown".to_string(),
+                        sensor_and_level: None,
+                    },
+                    ObsinnId {
+                        param_code: "TA".to_string(),
+                        sensor_and_level: None,
+                    },
+                ],
+                Ok(vec![
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "unknown".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: NonScalar("20240910000000"),
+                    },
+                    ObsinnObs {
+                        timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
+                        id: ObsinnId {
+                            param_code: "TA".to_string(),
+                            sensor_and_level: None,
+                        },
+                        value: Scalar(10.1),
+                    },
+                ]),
+                "unrecognised param code",
+            ),
+        ];
+
         let param_conversions = get_conversions("resources/paramconversions.csv").unwrap();
-        parse_obs(data.lines(), cols, param_conversions)
+        for (data, cols, expected, case_description) in cases {
+            let output = parse_obs(data.lines(), &cols, param_conversions.clone());
+            assert_eq!(output, expected, "{}", case_description);
+        }
     }
 
     // NOTE: just test for basic failures, the happy path should already be captured by the other tests
-    #[test_case(
-        "" => Err(Error::Parse("kldata message contained too few lines".to_string()));
-        "empty line"
-    )]
-    #[test_case(
-        "kldata/nationalnr=99993/type=508/messageid=23" => Err(Error::Parse("kldata message contained too few lines".to_string()));
-        "header only"
-    )]
-    #[test_case(
-        "kldata/nationalnr=93140/type=501/messageid=23
-DD(0,0),FF(0,0),DG_1(0,0),FG_1(0,0),KLFG_1(0,0),FX_1(0,0)" => Err(Error::Parse("empty row in kldata csv".to_string()));
-        "missing data"
-    )]
-    fn test_parse_kldata(body: &str) -> Result<(usize, ObsinnChunk), Error> {
+    #[test]
+    fn test_parse_kldata() {
+        let cases = vec![
+            (
+                "",
+                Err(Error::Parse(
+                    "kldata message contained too few lines".to_string(),
+                )),
+                "empty line",
+            ),
+            (
+                "kldata/nationalnr=99993/type=508/messageid=23",
+                Err(Error::Parse(
+                    "kldata message contained too few lines".to_string(),
+                )),
+                "header only",
+            ),
+            (
+                "kldata/nationalnr=93140/type=501/messageid=23
+        DD(0,0),FF(0,0),DG_1(0,0),FG_1(0,0),KLFG_1(0,0),FX_1(0,0)",
+                Err(Error::Parse("empty row in kldata csv".to_string())),
+                "missing data",
+            ),
+        ];
         let param_conversions = get_conversions("resources/paramconversions.csv").unwrap();
-        parse_kldata(body, param_conversions)
+
+        for (body, expected, case_description) in cases {
+            let output = parse_kldata(body, param_conversions.clone());
+            assert_eq!(output, expected, "{}", case_description);
+        }
     }
 }

@@ -29,7 +29,6 @@ rand_distr = "0.4.3"
 regex = "1.11.1"
 rove = { git = "https://github.com/metno/rove.git" }
 serde = { version = "1.0.215", features = ["derive"] }
-test-case = "3.3.1"
 thiserror = "1.0.69"
 tokio = { version = "1.41.1", features = ["rt-multi-thread", "macros"] }
 tokio-postgres = { version = "0.7.12", features = ["with-chrono-0_4"] }
