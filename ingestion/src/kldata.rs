@@ -13,7 +13,13 @@ use std::{
 
 // List of non scalar param codes we don't need to log since we already know their type
 const EXCLUDE_TEXT_LOG: [&str; 2] = ["KLOBS", "signature"];
-const SPECIAL_METAR_CASES: [&str; 5] = ["X1R", "X2R", "X3R", "WS", "WS2"];
+
+// FIXME: these params are scalar in Stinfosys, but are not when coming from Obsinn.
+// - The first five are METAR params that come in as 'xxL' and 'xxR', where 'x' is a numeric character.
+//   We need to decide how to treat them (Kvalobs silently discards them apparently)
+//   Or to change them in Stinfosys
+// - The last one (W1) seems to be a number most of the times, but gets an 'a' every once in a while. Maybe it's in hex format?
+const SPECIAL_CASES: [&str; 6] = ["X1R", "X2R", "X3R", "WS", "WS2", "W1"];
 
 /// Represents a set of observations that came in the same message from obsinn, with shared
 /// station_id and type_id
@@ -192,11 +198,7 @@ fn parse_obs<'a>(
                         if val.is_empty() || val == "-" {
                             ObsType::Scalar(None)
                         } else {
-                            // FIXME: these params are scalar in Stinfosys but come in as 'xxL' and
-                            // 'xxR', where 'x' is a numeric character.
-                            // We need to decide how to treat them (Kvalobs silently discards them apparently)
-                            // Or to change them in Stinfosys?
-                            if SPECIAL_METAR_CASES.contains(&col.param_code.as_str()) {
+                            if SPECIAL_CASES.contains(&col.param_code.as_str()) {
                                 ObsType::NonScalar(val)
                             } else {
                                 // TODO: should we simply return ObsType::Scalar(None) instead?
@@ -289,7 +291,7 @@ pub async fn filter_and_label_kldata<'a>(
     param_conversions: Arc<HashMap<String, ReferenceParam>>,
     permit_table: Arc<RwLock<(ParamPermitTable, StationPermitTable)>>,
 ) -> Result<Vec<Datum<'a>>, Error> {
-    let query_get_obsinn = conn
+    let query_get_obsinn = match conn
         .prepare(
             "SELECT timeseries \
                 FROM labels.obsinn \
@@ -299,7 +301,14 @@ pub async fn filter_and_label_kldata<'a>(
                     AND (($4::int IS NULL AND lvl IS NULL) OR (lvl = $4)) \
                     AND (($5::int IS NULL AND sensor IS NULL) OR (sensor = $5))",
         )
-        .await?;
+        .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            println!("prepare: {}", e);
+            return Err(Error::Database(e));
+        }
+    };
 
     let mut data = Vec::with_capacity(chunk.observations.len());
 
@@ -331,7 +340,7 @@ pub async fn filter_and_label_kldata<'a>(
             .map(|both| (Some(both.0), Some(both.1)))
             .unwrap_or((None, None));
 
-        let obsinn_label_result = transaction
+        let obsinn_label_result = match transaction
             .query_opt(
                 &query_get_obsinn,
                 &[
@@ -342,7 +351,18 @@ pub async fn filter_and_label_kldata<'a>(
                     &sensor,
                 ],
             )
-            .await?;
+            .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                println!("query_opt: {}", e);
+                println!(
+                    "{} {} {} {:?} {:?}",
+                    chunk.station_id, chunk.type_id, in_datum.id.param_code, lvl, sensor
+                );
+                return Err(Error::Database(e));
+            }
+        };
 
         let timeseries_id: i32 = match obsinn_label_result {
             Some(row) => row.get(0),
@@ -350,16 +370,23 @@ pub async fn filter_and_label_kldata<'a>(
                 // create new timeseries
                 // TODO: currently we create a timeseries with null location
                 // In the future the location column should be moved to the timeseries metadata table
-                let timeseries_id = transaction
+                let timeseries_id = match transaction
                     .query_one(
                         "INSERT INTO public.timeseries (fromtime) VALUES ($1) RETURNING id",
                         &[&in_datum.timestamp],
                     )
-                    .await?
-                    .get(0);
+                    .await
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        println!("query_one: {}", e);
+                        return Err(Error::Database(e));
+                    }
+                }
+                .get(0);
 
                 // create obsinn label
-                transaction
+                if let Err(e) = transaction
                     .execute(
                         "INSERT INTO labels.obsinn \
                                 (timeseries, nationalnummer, type_id, param_code, lvl, sensor) \
@@ -373,10 +400,14 @@ pub async fn filter_and_label_kldata<'a>(
                             &sensor,
                         ],
                     )
-                    .await?;
+                    .await
+                {
+                    println!("query_one: {}", e);
+                    return Err(Error::Database(e));
+                };
 
                 // create met label
-                transaction
+                if let Err(e) = transaction
                     .execute(
                         "INSERT INTO labels.met \
                                 (timeseries, station_id, param_id, type_id, lvl, sensor) \
@@ -390,13 +421,20 @@ pub async fn filter_and_label_kldata<'a>(
                             &sensor,
                         ],
                     )
-                    .await?;
+                    .await
+                {
+                    println!("transaction execute labels.met: {}", e);
+                    return Err(Error::Database(e));
+                };
 
                 timeseries_id
             }
         };
 
-        transaction.commit().await?;
+        if let Err(e) = transaction.commit().await {
+            println!("transaction commit: {}", e);
+            return Err(Error::Database(e));
+        };
 
         data.push(Datum {
             timeseries_id,
