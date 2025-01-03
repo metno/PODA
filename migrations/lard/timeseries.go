@@ -19,7 +19,7 @@ type Label struct {
 // Insert timeseries with given label and timespan, returning the timeseries ID
 func GetTimeseriesID(label *Label, timespan utils.TimeSpan, pool *pgxpool.Pool) (tsid int32, err error) {
 	var deactivated bool
-	if timespan.To == nil {
+	if timespan.To != nil {
 		deactivated = true
 	}
 
