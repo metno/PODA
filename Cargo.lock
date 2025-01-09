@@ -1498,6 +1498,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-postgres",
+ "toml",
 ]
 
 [[package]]
@@ -2347,7 +2348,7 @@ dependencies = [
 [[package]]
 name = "rove"
 version = "0.1.1"
-source = "git+https://github.com/metno/rove.git?branch=lard_fixes#1d79a555847f9223c9f6ee459e7a480ff18f41bd"
+source = "git+https://github.com/metno/rove.git?branch=lard_fixes#5f70d99d59b0d9d1c8fc301893684c919cab286f"
 dependencies = [
  "async-trait",
  "chrono",

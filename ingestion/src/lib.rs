@@ -7,9 +7,10 @@ use axum::{
 use bb8::PooledConnection;
 use bb8_postgres::PostgresConnectionManager;
 use chrono::{DateTime, Utc};
+use chronoutil::RelativeDuration;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use rove::data_switch::{SpaceSpec, TimeSpec, Timestamp};
+use rove::data_switch::{TimeSpec, Timestamp};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -21,6 +22,7 @@ use tokio_postgres::NoTls;
 #[cfg(feature = "kafka")]
 pub mod kvkafka;
 pub mod permissions;
+pub mod qc_pipelines;
 use permissions::{ParamPermitTable, StationPermitTable};
 
 #[derive(Error, Debug)]
@@ -33,6 +35,8 @@ pub enum Error {
     Parse(String),
     #[error("qc system returned an error: {0}")]
     Qc(#[from] rove::scheduler::Error),
+    #[error("rove connector returned an error: {0}")]
+    Connector(#[from] rove::data_switch::Error),
     #[error("RwLock was poisoned: {0}")]
     Lock(String),
     #[error("Could not read environment variable: {0}")]
@@ -76,7 +80,8 @@ struct IngestorState {
     db_pool: PgConnectionPool,
     param_conversions: ParamConversions, // converts param codes to element ids
     permit_tables: Arc<RwLock<(ParamPermitTable, StationPermitTable)>>,
-    qc_scheduler: Arc<rove::Scheduler>,
+    rove_connector: Arc<rove_connector::Connector>,
+    qc_pipelines: Arc<HashMap<(i32, RelativeDuration), rove::Pipeline>>,
 }
 
 impl FromRef<IngestorState> for PgConnectionPool {
@@ -97,9 +102,15 @@ impl FromRef<IngestorState> for Arc<RwLock<(ParamPermitTable, StationPermitTable
     }
 }
 
-impl FromRef<IngestorState> for Arc<rove::Scheduler> {
-    fn from_ref(state: &IngestorState) -> Arc<rove::Scheduler> {
-        state.qc_scheduler.clone()
+impl FromRef<IngestorState> for Arc<rove_connector::Connector> {
+    fn from_ref(state: &IngestorState) -> Arc<rove_connector::Connector> {
+        state.rove_connector.clone()
+    }
+}
+
+impl FromRef<IngestorState> for Arc<HashMap<(i32, RelativeDuration), rove::Pipeline>> {
+    fn from_ref(state: &IngestorState) -> Arc<HashMap<(i32, RelativeDuration), rove::Pipeline>> {
+        state.qc_pipelines.clone()
     }
 }
 
@@ -204,8 +215,9 @@ pub async fn insert_data(
 
 pub async fn qc_data(
     chunks: &Vec<DataChunk<'_>>,
-    scheduler: &rove::Scheduler,
     conn: &mut PooledPgConn<'_>,
+    rove_connector: &rove_connector::Connector,
+    pipelines: &HashMap<(i32, RelativeDuration), rove::Pipeline>,
 ) -> Result<(), Error> {
     // TODO: see conflict resolution issues on queries in `insert_data`
     // On periodic or consistency QC pipelines, we should be checking the provenance table to
@@ -245,19 +257,19 @@ pub async fn qc_data(
         for datum in chunk.data.iter() {
             let time_spec =
                 TimeSpec::new(Timestamp(timestamp), Timestamp(timestamp), time_resolution);
-            let space_spec = SpaceSpec::One(datum.timeseries_id.to_string());
-            // TODO: load and fetch real pipeline
-            let pipeline = "sample_pipeline";
-            let rove_output = scheduler
-                .validate_direct(
-                    "lard",
-                    &[] as &[&str],
+            let pipeline = match pipelines.get(&(datum.param_id, time_resolution)) {
+                Some(pipeline) => pipeline,
+                None => continue,
+            };
+            let data = rove_connector
+                .fetch_one(
+                    datum.timeseries_id,
                     &time_spec,
-                    &space_spec,
-                    pipeline,
-                    None,
+                    pipeline.num_leading_required,
+                    pipeline.num_trailing_required,
                 )
                 .await?;
+            let rove_output = rove::Scheduler::schedule_tests(pipeline, data)?;
 
             let first_fail = rove_output.iter().find(|check_result| {
                 if let Some(result) = check_result.results.first() {
@@ -276,7 +288,8 @@ pub async fn qc_data(
             qc_results.push(QcResult {
                 timeseries_id: datum.timeseries_id,
                 timestamp: chunk.timestamp,
-                pipeline: pipeline.to_string(),
+                // TODO: should this encode more info? In theory the param/type can be deduced from the DB anyway
+                pipeline: "fresh".to_string(),
                 flag,
                 fail_condition,
             });
@@ -339,7 +352,8 @@ async fn handle_kldata(
     State(pool): State<PgConnectionPool>,
     State(param_conversions): State<ParamConversions>,
     State(permit_table): State<Arc<RwLock<(ParamPermitTable, StationPermitTable)>>>,
-    State(qc_scheduler): State<Arc<rove::Scheduler>>,
+    State(rove_connector): State<Arc<rove_connector::Connector>>,
+    State(qc_pipelines): State<Arc<HashMap<(i32, RelativeDuration), rove::Pipeline>>>,
     body: String,
 ) -> Json<KldataResp> {
     let result: Result<usize, Error> = async {
@@ -353,7 +367,7 @@ async fn handle_kldata(
 
         insert_data(&data, &mut conn).await?;
 
-        qc_data(&data, &qc_scheduler, &mut conn).await?;
+        qc_data(&data, &mut conn, &rove_connector, &qc_pipelines).await?;
 
         Ok(message_id)
     }
@@ -404,12 +418,14 @@ pub async fn run(
     db_pool: PgConnectionPool,
     param_conversion_path: &str,
     permit_tables: Arc<RwLock<(ParamPermitTable, StationPermitTable)>>,
-    qc_scheduler: rove::Scheduler,
+    rove_connector: rove_connector::Connector,
+    qc_pipelines: HashMap<(i32, RelativeDuration), rove::Pipeline>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // set up param conversion map
     let param_conversions = get_conversions(param_conversion_path)?;
 
-    let qc_scheduler = Arc::new(qc_scheduler);
+    let rove_connector = Arc::new(rove_connector);
+    let qc_pipelines = Arc::new(qc_pipelines);
 
     // build our application with a single route
     let app = Router::new()
@@ -418,7 +434,8 @@ pub async fn run(
             db_pool,
             param_conversions,
             permit_tables,
-            qc_scheduler,
+            rove_connector,
+            qc_pipelines,
         });
 
     // run our app with hyper, listening globally on port 3001

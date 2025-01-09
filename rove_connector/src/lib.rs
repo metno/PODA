@@ -91,7 +91,7 @@ fn regularize(
 }
 
 impl Connector {
-    async fn fetch_one(
+    pub async fn fetch_one(
         &self,
         ts_id: i32,
         time_spec: &TimeSpec,
