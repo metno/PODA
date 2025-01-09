@@ -1,13 +1,7 @@
 use bb8_postgres::PostgresConnectionManager;
-use rove::{
-    data_switch::{DataConnector, DataSwitch},
-    load_pipelines,
-};
+use lard_ingestion::qc_pipelines::load_pipelines;
 use rove_connector::Connector;
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 use tokio_postgres::NoTls;
 
 use lard_ingestion::permissions;
@@ -37,15 +31,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let db_pool = bb8::Pool::builder().build(manager).await?;
 
     // QC system
-    let scheduler = rove::Scheduler::new(
-        load_pipelines("").unwrap(),
-        DataSwitch::new(HashMap::from([(
-            String::from("lard"),
-            Box::new(Connector {
-                pool: db_pool.clone(),
-            }) as Box<dyn DataConnector + Send>,
-        )])),
-    );
+    // NOTE: Keeping this vesion around in case we want it for the periodic checks
+    // let scheduler = rove::Scheduler::new(
+    //     load_pipelines("").unwrap(),
+    //     DataSwitch::new(HashMap::from([(
+    //         String::from("lard"),
+    //         Box::new(Connector {
+    //             pool: db_pool.clone(),
+    //         }) as Box<dyn DataConnector + Send>,
+    //     )])),
+    // );
+    let rove_connector = Connector {
+        pool: db_pool.clone(),
+    };
+
+    let qc_pipelines = load_pipelines("qc_pipelines")?;
 
     println!("Spawing task to fetch permissions from StInfoSys...");
     // background task to refresh permit tables every 30 mins
@@ -79,5 +79,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     // Set up and run our server + database
     println!("Ingestion server started!");
-    lard_ingestion::run(db_pool, PARAMCONV, permit_tables, scheduler).await
+    lard_ingestion::run(
+        db_pool,
+        PARAMCONV,
+        permit_tables,
+        rove_connector,
+        qc_pipelines,
+    )
+    .await
 }
