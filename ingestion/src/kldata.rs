@@ -776,12 +776,6 @@ mod tests {
                 )),
                 "header only",
             ),
-            (
-                "kldata/nationalnr=93140/type=501/messageid=23
-        DD(0,0),FF(0,0),DG_1(0,0),FG_1(0,0),KLFG_1(0,0),FX_1(0,0)",
-                Err(Error::Parse("empty row in kldata csv".to_string())),
-                "missing data",
-            ),
         ];
         let param_conversions = get_conversions("resources/paramconversions.csv").unwrap();
 

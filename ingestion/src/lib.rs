@@ -367,6 +367,7 @@ async fn handle_kldata(
 
         insert_data(&data, &mut conn).await?;
 
+        // TODO: should we tolerate failure here? Perhaps there should be metric for this?
         qc_data(&data, &mut conn, &rove_connector, &qc_pipelines).await?;
 
         Ok(message_id)
@@ -424,6 +425,8 @@ pub async fn run(
     // set up param conversion map
     let param_conversions = get_conversions(param_conversion_path)?;
 
+    // TODO: This should be fine without Arc, we can just clone it as the internal db_pool is
+    // already reference counted
     let rove_connector = Arc::new(rove_connector);
     let qc_pipelines = Arc::new(qc_pipelines);
 
