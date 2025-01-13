@@ -514,7 +514,11 @@ async fn test_timeslice_endpoint() {
         let client = reqwest::Client::new();
         for ts in &test_data {
             let ingestor_resp = ingest_data(&client, ts.obsinn_message()).await;
-            assert_eq!(ingestor_resp.res, 0);
+            assert_eq!(
+                ingestor_resp.res, 0,
+                "ingestor_resp.message: {}",
+                ingestor_resp.message
+            );
         }
 
         for param in &params {
