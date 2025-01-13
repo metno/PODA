@@ -23,8 +23,8 @@ CREATE TABLE IF NOT EXISTS flags.confident_provenance (
     CONSTRAINT unique_confident_providence_timeseries_obstime_pipeline UNIQUE (timeseries, obstime, pipeline),
     CONSTRAINT fk_confident_providence_timeseries FOREIGN KEY (timeseries) REFERENCES public.timeseries
 ) PARTITION BY RANGE (obstime);
-CREATE INDEX IF NOT EXISTS confident_provenance_timestamp_index ON flags.confident_providence (obstime);
-CREATE INDEX IF NOT EXISTS confident_provenance_timeseries_index ON flags.confident_providence USING HASH (timeseries);
+CREATE INDEX IF NOT EXISTS confident_provenance_timestamp_index ON flags.confident_provenance (obstime);
+CREATE INDEX IF NOT EXISTS confident_provenance_timeseries_index ON flags.confident_provenance USING HASH (timeseries);
 
 CREATE TABLE IF NOT EXISTS flags.kvdata (
     timeseries INT4 REFERENCES public.timeseries,
