@@ -233,7 +233,7 @@ pub async fn qc_data(
             "INSERT INTO flags.confident (timeseries, obstime, usable) \
                 VALUES ($1, $2, $3) \
                 ON CONFLICT ON CONSTRAINT unique_confident_timeseries_obstime \
-                    DO UPDATE SET usable = usable AND EXCLUDED.usable",
+                    DO UPDATE SET usable = flags.confident.usable AND EXCLUDED.usable",
         )
         .await?;
     let query_provenance = conn
