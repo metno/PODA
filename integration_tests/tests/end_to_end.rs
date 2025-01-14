@@ -13,13 +13,14 @@ use rove::data_switch::{DataConnector, SpaceSpec, TimeSpec, Timestamp};
 use tokio::sync::mpsc;
 use tokio_postgres::NoTls;
 
-use lard_api::timeseries::Timeseries;
-use lard_api::{LatestResp, TimeseriesResp, TimesliceResp};
-use lard_ingestion::kvkafka;
-use lard_ingestion::permissions::{
-    timeseries_is_open, ParamPermit, ParamPermitTable, StationPermitTable,
+use lard_api::{timeseries::Timeseries, LatestResp, TimeseriesResp, TimesliceResp};
+use lard_ingestion::{
+    kvkafka,
+    permissions::{timeseries_is_open, ParamPermit, ParamPermitTable, StationPermitTable},
+    qc_pipelines::load_pipelines,
+    KldataResp,
 };
-use lard_ingestion::KldataResp;
+use rove_connector::Connector;
 
 const CONNECT_STRING: &str = "host=localhost user=postgres dbname=postgres password=postgres";
 const PARAMCONV_CSV: &str = "../ingestion/resources/paramconversions.csv";
@@ -245,6 +246,11 @@ async fn e2e_test_wrapper<T: Future<Output = ()>>(test: T) {
     let api_pool = db_pool.clone();
     let ingestion_pool = db_pool.clone();
 
+    let rove_connector = Connector {
+        pool: db_pool.clone(),
+    };
+    let qc_pipelines = load_pipelines("mock_qc_pipelines/fresh").expect("failed to load pipelines");
+
     let api_server = tokio::spawn(async move {
         tokio::select! {
             output = lard_api::run(api_pool) => output,
@@ -256,9 +262,12 @@ async fn e2e_test_wrapper<T: Future<Output = ()>>(test: T) {
     });
     let ingestor = tokio::spawn(async move {
         tokio::select! {
-            output = lard_ingestion::run(ingestion_pool,
-        PARAMCONV_CSV,
-        mock_permit_tables(),
+            output = lard_ingestion::run(
+                ingestion_pool,
+                PARAMCONV_CSV,
+                mock_permit_tables(),
+                rove_connector,
+                qc_pipelines,
             ) => output,
             _ = init_shutdown_rx2.recv() => {
                 ingestor_shutdown_tx.send(()).unwrap();
