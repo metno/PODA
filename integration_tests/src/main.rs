@@ -24,9 +24,9 @@ async fn main() {
     // NOTE: order matters
     let schemas = [
         "db/public.sql",
-        "db/partitions_generated.sql",
         "db/labels.sql",
         "db/flags.sql",
+        "db/partitions_generated.sql",
     ];
     for schema in schemas {
         insert_schema(&client, schema).await.unwrap();
