@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS public.data (
     timeseries INT4 NOT NULL,
     obstime TIMESTAMPTZ NOT NULL,
     obsvalue REAL,
+    -- TODO: should qc_usable be NOT NULL? and default to true?
+    -- It would make greatly reduce the update load when QCing old data
+    qc_usable BOOLEAN,
     CONSTRAINT unique_data_timeseries_obstime UNIQUE (timeseries, obstime),
     CONSTRAINT fk_data_timeseries FOREIGN KEY (timeseries) REFERENCES public.timeseries
 ) PARTITION BY RANGE (obstime);
@@ -43,6 +46,7 @@ CREATE TABLE IF NOT EXISTS public.nonscalar_data (
     timeseries INT4 NOT NULL,
     obstime TIMESTAMPTZ NOT NULL,
     obsvalue TEXT,
+    qc_usable BOOLEAN,
     CONSTRAINT unique_nonscalar_data_timeseries_obstime UNIQUE (timeseries, obstime),
     CONSTRAINT fk_nonscalar_data_timeseries FOREIGN KEY (timeseries) REFERENCES public.timeseries
 ) PARTITION BY RANGE (obstime);
