@@ -384,6 +384,7 @@ pub async fn filter_and_label_kldata<'a>(
                 timeseries_id,
                 param_id: param.id,
                 value: in_datum.value,
+                qc_usable: None,
             });
         }
         out_chunks.push(DataChunk {

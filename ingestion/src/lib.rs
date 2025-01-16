@@ -126,6 +126,7 @@ pub struct Datum<'a> {
     // needed for QC
     param_id: i32,
     value: ObsType<'a>,
+    qc_usable: Option<bool>,
 }
 
 /// Generic container for a piece of data ready to be inserted into the DB
@@ -135,7 +136,7 @@ pub struct DataChunk<'a> {
     data: Vec<Datum<'a>>,
 }
 
-pub struct QcResult {
+pub struct QcProvenance {
     timeseries_id: i32,
     timestamp: DateTime<Utc>,
     // TODO: possible to avoid heap-allocating this?
@@ -148,9 +149,23 @@ pub struct QcResult {
 // TODO: benchmark insertion of scalar and non-scalar together vs separately?
 pub async fn insert_data(
     chunks: &Vec<DataChunk<'_>>,
+    provenance: &[QcProvenance],
     conn: &mut PooledPgConn<'_>,
 ) -> Result<(), Error> {
     // TODO: the conflict resolution on this query is an imperfect solution, and needs improvement
+    //
+    // ---
+    //
+    // On periodic or consistency QC pipelines, we should be checking the provenance table to
+    // decide how to update usable on a conflict, but here it should be fine not to since this is
+    // fresh data.
+    // The `AND` in the `DO UPDATE SET` subexpression better handles the case of resent data where
+    // periodic checks might already have been run by defaulting to false. If the existing data was
+    // only fresh checked, and the replacement is different, this could result in a false positive.
+    // I think this is OK though since it should be a rare occurence and will be quickly cleared up
+    // by a periodic run regardless.
+    //
+    // ---
     //
     // I learned from Søren that obsinn and kvalobs organise updates and deletions by sending new
     // messages that overwrite previous messages. The catch is that the new message does not need
@@ -164,19 +179,29 @@ pub async fn insert_data(
     // implement it here.
     let query_scalar = conn
         .prepare(
-            "INSERT INTO public.data (timeseries, obstime, obsvalue) \
-                VALUES ($1, $2, $3) \
+            "INSERT INTO public.data (timeseries, obstime, obsvalue, qc_usable) \
+                VALUES ($1, $2, $3, $4) \
                 ON CONFLICT ON CONSTRAINT unique_data_timeseries_obstime \
-                    DO UPDATE SET obsvalue = EXCLUDED.obsvalue",
+                    DO UPDATE SET obsvalue = EXCLUDED.obsvalue, \
+                    qc_usable = public.data.qc_usable AND EXCLUDED.qc_usable",
         )
         .await?;
 
     let query_nonscalar = conn
         .prepare(
-            "INSERT INTO public.nonscalar_data (timeseries, obstime, obsvalue) \
-                VALUES ($1, $2, $3) \
+            "INSERT INTO public.nonscalar_data (timeseries, obstime, obsvalue, qc_usable) \
+                VALUES ($1, $2, $3, $4) \
                 ON CONFLICT ON CONSTRAINT unique_nonscalar_data_timeseries_obstime \
-                    DO UPDATE SET obsvalue = EXCLUDED.obsvalue",
+                    DO UPDATE SET obsvalue = EXCLUDED.obsvalue, \
+                    qc_usable = public.nonscalar_data.qc_usable AND EXCLUDED.qc_usable",
+        )
+        .await?;
+    let query_provenance = conn
+        .prepare(
+            "INSERT INTO flags.confident_provenance (timeseries, obstime, pipeline, flag, fail_condition) \
+                VALUES ($1, $2, $3, $4, $5) \
+                ON CONFLICT ON CONSTRAINT unique_confident_providence_timeseries_obstime_pipeline \
+                    DO UPDATE SET flag = EXCLUDED.flag, fail_condition = EXCLUDED.fail_condition",
         )
         .await?;
 
@@ -190,14 +215,24 @@ pub async fn insert_data(
                     ObsType::Scalar(val) => {
                         conn.execute(
                             &query_scalar,
-                            &[&datum.timeseries_id, &chunk.timestamp, &val],
+                            &[
+                                &datum.timeseries_id,
+                                &chunk.timestamp,
+                                &val,
+                                &datum.qc_usable,
+                            ],
                         )
                         .await
                     }
                     ObsType::NonScalar(val) => {
                         conn.execute(
                             &query_nonscalar,
-                            &[&datum.timeseries_id, &chunk.timestamp, &val],
+                            &[
+                                &datum.timeseries_id,
+                                &chunk.timestamp,
+                                &val,
+                                &datum.qc_usable,
+                            ],
                         )
                         .await
                     }
@@ -210,42 +245,36 @@ pub async fn insert_data(
         }
     }
 
+    let mut futures = provenance
+        .iter()
+        .map(|qc_result| async {
+            conn.execute(
+                &query_provenance,
+                &[
+                    &qc_result.timeseries_id,
+                    &qc_result.timestamp,
+                    &qc_result.pipeline,
+                    &qc_result.flag,
+                    &qc_result.fail_condition,
+                ],
+            )
+            .await
+        })
+        .collect::<FuturesUnordered<_>>();
+
+    while let Some(res) = futures.next().await {
+        res?;
+    }
+
     Ok(())
 }
 
 pub async fn qc_data(
-    chunks: &Vec<DataChunk<'_>>,
-    conn: &mut PooledPgConn<'_>,
+    chunks: &mut Vec<DataChunk<'_>>,
     rove_connector: &rove_connector::Connector,
     pipelines: &HashMap<(i32, RelativeDuration), rove::Pipeline>,
-) -> Result<(), Error> {
-    // TODO: see conflict resolution issues on queries in `insert_data`
-    // On periodic or consistency QC pipelines, we should be checking the provenance table to
-    // decide how to update usable on a conflict, but here it should be fine not to since this is
-    // fresh data.
-    // The `AND` in the `DO UPDATE SET` subexpression better handles the case of resent data where
-    // periodic checks might already have been run by defaulting to false. If the existing data was
-    // only fresh checked, and the replacement is different, this could result in a false positive.
-    // I think this is OK though since it should be a rare occurence and will be quickly cleared up
-    // by a periodic run regardless.
-    let query = conn
-        .prepare(
-            "INSERT INTO flags.confident (timeseries, obstime, usable) \
-                VALUES ($1, $2, $3) \
-                ON CONFLICT ON CONSTRAINT unique_confident_timeseries_obstime \
-                    DO UPDATE SET usable = flags.confident.usable AND EXCLUDED.usable",
-        )
-        .await?;
-    let query_provenance = conn
-        .prepare(
-            "INSERT INTO flags.confident_provenance (timeseries, obstime, pipeline, flag, fail_condition) \
-                VALUES ($1, $2, $3, $4, $5) \
-                ON CONFLICT ON CONSTRAINT unique_confident_providence_timeseries_obstime_pipeline \
-                    DO UPDATE SET flag = EXCLUDED.flag, fail_condition = EXCLUDED.fail_condition",
-        )
-        .await?;
-
-    let mut qc_results: Vec<QcResult> = Vec::new();
+) -> Result<Vec<QcProvenance>, Error> {
+    let mut qc_results: Vec<QcProvenance> = Vec::new();
     for chunk in chunks {
         let time_resolution = match chunk.time_resolution {
             Some(time_resolution) => time_resolution,
@@ -254,7 +283,7 @@ pub async fn qc_data(
         };
         let timestamp = chunk.timestamp.timestamp();
 
-        for datum in chunk.data.iter() {
+        for datum in chunk.data.iter_mut() {
             let time_spec =
                 TimeSpec::new(Timestamp(timestamp), Timestamp(timestamp), time_resolution);
             let pipeline = match pipelines.get(&(datum.param_id, time_resolution)) {
@@ -285,7 +314,9 @@ pub async fn qc_data(
                 None => (0, None),
             };
 
-            qc_results.push(QcResult {
+            datum.qc_usable = Some(flag == 0);
+
+            qc_results.push(QcProvenance {
                 timeseries_id: datum.timeseries_id,
                 timestamp: chunk.timestamp,
                 // TODO: should this encode more info? In theory the param/type can be deduced from the DB anyway
@@ -296,37 +327,7 @@ pub async fn qc_data(
         }
     }
 
-    let mut futures = qc_results
-        .iter()
-        .map(|qc_result| async {
-            conn.execute(
-                &query,
-                &[
-                    &qc_result.timeseries_id,
-                    &qc_result.timestamp,
-                    &(qc_result.flag == 0),
-                ],
-            )
-            .await?;
-            conn.execute(
-                &query_provenance,
-                &[
-                    &qc_result.timeseries_id,
-                    &qc_result.timestamp,
-                    &qc_result.pipeline,
-                    &qc_result.flag,
-                    &qc_result.fail_condition,
-                ],
-            )
-            .await
-        })
-        .collect::<FuturesUnordered<_>>();
-
-    while let Some(res) = futures.next().await {
-        res?;
-    }
-
-    Ok(())
+    Ok(qc_results)
 }
 
 pub mod kldata;
@@ -361,14 +362,14 @@ async fn handle_kldata(
 
         let (message_id, obsinn_chunk) = parse_kldata(&body, param_conversions.clone())?;
 
-        let data =
+        let mut data =
             filter_and_label_kldata(obsinn_chunk, &mut conn, param_conversions, permit_table)
                 .await?;
 
-        insert_data(&data, &mut conn).await?;
-
         // TODO: should we tolerate failure here? Perhaps there should be metric for this?
-        qc_data(&data, &mut conn, &rove_connector, &qc_pipelines).await?;
+        let provenance = qc_data(&mut data, &rove_connector, &qc_pipelines).await?;
+
+        insert_data(&data, &provenance, &mut conn).await?;
 
         Ok(message_id)
     }

@@ -49,7 +49,6 @@ fn main() -> Result<(), std::io::Error> {
         &paritition_boundary_years,
         &mut writer,
     )?;
-    create_table_partitions("flags.confident", &paritition_boundary_years, &mut writer)?;
     create_table_partitions(
         "flags.confident_provenance",
         &paritition_boundary_years,
