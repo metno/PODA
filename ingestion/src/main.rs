@@ -45,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         pool: db_pool.clone(),
     };
 
-    let qc_pipelines = load_pipelines("qc_pipelines")?;
+    let qc_pipelines = load_pipelines("qc_pipelines/fresh")?;
 
     println!("Spawing task to fetch permissions from StInfoSys...");
     // background task to refresh permit tables every 30 mins
