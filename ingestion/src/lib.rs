@@ -10,7 +10,6 @@ use chrono::{DateTime, Utc};
 use chronoutil::RelativeDuration;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use rove::data_switch::{TimeSpec, Timestamp};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -281,24 +280,26 @@ pub async fn qc_data(
             // if there's no time_resolution, we can't QC
             None => continue,
         };
-        let timestamp = chunk.timestamp.timestamp();
 
         for datum in chunk.data.iter_mut() {
-            let time_spec =
-                TimeSpec::new(Timestamp(timestamp), Timestamp(timestamp), time_resolution);
+            let inner_datum = match datum.value {
+                ObsType::Scalar(x) => x,
+                ObsType::NonScalar(_) => continue,
+            };
             let pipeline = match pipelines.get(&(datum.param_id, time_resolution)) {
                 Some(pipeline) => pipeline,
                 None => continue,
             };
-            let data = rove_connector
-                .fetch_one(
+            let data_cache = rove_connector
+                .fetch_context(
                     datum.timeseries_id,
-                    &time_spec,
+                    chunk.timestamp,
+                    time_resolution,
                     pipeline.num_leading_required,
-                    pipeline.num_trailing_required,
+                    Some(inner_datum),
                 )
                 .await?;
-            let rove_output = rove::Scheduler::schedule_tests(pipeline, data)?;
+            let rove_output = rove::Scheduler::schedule_tests(pipeline, data_cache)?;
 
             let first_fail = rove_output.iter().find(|check_result| {
                 if let Some(result) = check_result.results.first() {
