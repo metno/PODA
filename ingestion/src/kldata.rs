@@ -11,14 +11,19 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-// List of non scalar param codes we don't need to log since we already know their type
-const EXCLUDE_TEXT_LOG: [&str; 2] = ["KLOBS", "signature"];
+/// List of non scalar param codes we don't need to log since we already know their type
+const EXCLUDE_TEXT_LOG: [&str; 3] = [
+    "KLOBS",     // timestamp
+    "signature", // text
+    "WWB1",      // text, metar
+];
 
-// FIXME: these params are scalar in Stinfosys, but are not when coming from Obsinn.
-// - The first five are METAR params that come in as 'xxL' and 'xxR', where 'x' is a numeric character.
-//   We need to decide how to treat them (Kvalobs silently discards them apparently)
-//   Or to change them in Stinfosys
-// - The last one (W1) seems to be a number most of the times, but gets an 'a' every once in a while. Maybe it's in hex format?
+/// FIXME: these params are scalar in Stinfosys, but are not when coming from Obsinn.
+/// - The first five are METAR params that come in as 'xxL' and 'xxR', where 'x' is a numeric character.
+///   We need to decide how to treat them (Kvalobs silently discards them apparently)
+///   Or if they need to be changed in Stinfosys
+/// - The last one (W1) seems to be a number most of the times, but gets an 'a' every once in a while.
+///   Maybe it's in hex format?
 const SPECIAL_CASES: [&str; 6] = ["X1R", "X2R", "X3R", "WS", "WS2", "W1"];
 
 /// Represents a set of observations that came in the same message from obsinn, with shared
@@ -159,6 +164,39 @@ fn parse_columns(cols_raw: &str) -> Result<Vec<ObsinnId>, Error> {
         .collect::<Result<Vec<ObsinnId>, Error>>()
 }
 
+fn parse_scalar<'a>(val: &'a str, col: &ObsinnId) -> Result<ObsType<'a>, Error> {
+    // NOTE(1): some params can be empty (old formats that were carried over
+    // or a hacky way to have the observations deleted)
+    // NOTE(2): some params can be simply "-" instead of being empty (hack?
+    // Does it have a meaning?)
+    if val.is_empty() || val == "-" {
+        return Ok(ObsType::Scalar(None));
+    }
+
+    let parsed = match val.parse() {
+        Ok(v) => v,
+        Err(_) => {
+            // TODO: should this fallback to inserting into the text table?
+            let msg = format!(
+                "value {} = {} could not be parsed as float",
+                col.param_code, val
+            );
+            println!("{}", msg);
+            return Err(Error::Parse(msg));
+        }
+    };
+
+    Ok(ObsType::Scalar(Some(parsed)))
+}
+
+fn parse_nonscalar(val: &str) -> ObsType {
+    if val.is_empty() || val == "-" {
+        return ObsType::NonScalar(None);
+    }
+
+    ObsType::NonScalar(Some(val))
+}
+
 fn parse_obs<'a>(
     csv_body: Lines<'a>,
     columns: &[ObsinnId],
@@ -186,48 +224,24 @@ fn parse_obs<'a>(
             let col = columns[i].clone();
 
             let value = match reference_params.get(&col.param_code) {
+                // NOTE: we assume ref_params marked as scalar in Stinfosys to be floats (but
+                // could be ints, which wouldn't be ideal?)
+                // Some(ref_param) => {
+                Some(ref_param)
+                    if ref_param.is_scalar && !SPECIAL_CASES.contains(&col.param_code.as_str()) =>
+                {
+                    parse_scalar(val, &col)?
+                }
+                // Some(ref_param) if ref_param.is_scalar => parse_scalar(val, &col)?,
                 Some(ref_param) => {
-                    // NOTE: we assume ref_params marked as scalar in Stinfosys to be floats (but
-                    // could be ints, which wouldn't be ideal?)
-                    if ref_param.is_scalar {
-                        // TODO: move to separate function
-                        // NOTE(1): some params can be empty (old formats that were carried over
-                        // or a hacky way to have the observations deleted)
-                        // NOTE(2): some params can be simply "-" instead of being empty (hack?
-                        // Does it have a meaning?)
-                        if val.is_empty() || val == "-" {
-                            ObsType::Scalar(None)
-                        } else {
-                            if SPECIAL_CASES.contains(&col.param_code.as_str()) {
-                                ObsType::NonScalar(val)
-                            } else {
-                                // TODO: should we simply return ObsType::Scalar(None) instead?
-                                let parsed = match val.parse() {
-                                    Ok(v) => v,
-                                    Err(_) => {
-                                        let msg = format!(
-                                            "value {} = {} could not be parsed as float",
-                                            col.param_code, val
-                                        );
-                                        println!("{}", msg);
-                                        return Err(Error::Parse(msg));
-                                    }
-                                };
-
-                                ObsType::Scalar(Some(parsed))
-                            }
-                        }
-                    } else {
-                        // TODO: we should implement logging/tracing sooner or later
-                        if !EXCLUDE_TEXT_LOG.contains(&col.param_code.as_str()) {
-                            println!(
-                                "non-scalar param ({}, {}, {}): '{}'",
-                                ref_param.id, col.param_code, ref_param.element_id, val
-                            );
-                        }
-
-                        ObsType::NonScalar(val)
+                    if !EXCLUDE_TEXT_LOG.contains(&col.param_code.as_str()) {
+                        println!(
+                            "non-scalar param ({}, {}, {}): '{}'",
+                            ref_param.id, col.param_code, ref_param.element_id, val
+                        );
                     }
+
+                    parse_nonscalar(val)
                 }
                 None => {
                     println!("unrecognised param_code '{}': '{}'", col.param_code, val);
@@ -238,7 +252,7 @@ fn parse_obs<'a>(
                     //     Ok(parsed) => ObsType::Scalar(Some(parsed)),
                     //     Err(_) => ObsType::NonScalar(val),
                     // }
-                    ObsType::NonScalar(val)
+                    parse_nonscalar(val)
                 }
             };
 
@@ -600,7 +614,7 @@ mod tests {
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
                 id: ObsinnId{param_code: "KLOBS".to_string(), sensor_and_level: None},
-                value: NonScalar("20240910000000")
+                value: NonScalar(Some("20240910000000"))
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
@@ -618,7 +632,7 @@ mod tests {
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
                 id: ObsinnId{param_code: "unknown".to_string(), sensor_and_level: None}, 
-                value: NonScalar("20240910000000") 
+                value: NonScalar(Some("20240910000000")) 
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
@@ -654,7 +668,7 @@ mod tests {
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
                 id: ObsinnId{param_code: "FGN_01".to_string(), sensor_and_level: None},
-                value: NonScalar("")
+                value: NonScalar(None)
             },
         ]);
         "parameter with missing observations"
@@ -674,12 +688,12 @@ mod tests {
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
                 id: ObsinnId{param_code: "X1R".to_string(), sensor_and_level: None},
-                value: NonScalar("24R")
+                value: NonScalar(Some("24R"))
             },
             ObsinnObs{
                 timestamp: Utc.with_ymd_and_hms(2024, 9, 10, 0, 0, 0).unwrap(),
                 id: ObsinnId{param_code: "X2R".to_string(), sensor_and_level: None},
-                value:NonScalar("24L") 
+                value:NonScalar(Some("24L")) 
             },
         ]);
         "special cases"

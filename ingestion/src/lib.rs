@@ -97,7 +97,7 @@ impl FromRef<IngestorState> for Arc<RwLock<(ParamPermitTable, StationPermitTable
 #[derive(Debug, PartialEq)]
 pub enum ObsType<'a> {
     Scalar(Option<f32>),
-    NonScalar(&'a str),
+    NonScalar(Option<&'a str>),
 }
 
 /// Generic container for a piece of data ready to be inserted into the DB
