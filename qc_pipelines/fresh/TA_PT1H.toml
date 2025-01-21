@@ -34,10 +34,10 @@ name = "flatline_check"
 [pipeline.step.flatline_check]
 max = 10
 
-[[pipeline.step]]
-name = "spike_check"
-[pipeline.step.spike_check]
-max = 18.6
+# [[pipeline.step]]
+# name = "spike_check"
+# [pipeline.step.spike_check]
+# max = 18.6
 
 # [[pipeline.step]]
 # name = "model_consistency_check"
