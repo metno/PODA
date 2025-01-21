@@ -9,8 +9,8 @@ CREATE TABLE IF NOT EXISTS flags.confident_provenance (
     flag INT4 NOT NULL,
     -- TODO: better name? since this might be applied to flags that aren't fail but also aren't pass?
     fail_condition TEXT NULL,
-    CONSTRAINT unique_confident_providence_timeseries_obstime_pipeline UNIQUE (timeseries, obstime, pipeline),
-    CONSTRAINT fk_confident_providence_timeseries FOREIGN KEY (timeseries) REFERENCES public.timeseries
+    CONSTRAINT unique_confident_provenance_timeseries_obstime_pipeline UNIQUE (timeseries, obstime, pipeline),
+    CONSTRAINT fk_confident_provenance_timeseries FOREIGN KEY (timeseries) REFERENCES public.timeseries
 ) PARTITION BY RANGE (obstime);
 CREATE INDEX IF NOT EXISTS confident_provenance_timestamp_index ON flags.confident_provenance (obstime);
 CREATE INDEX IF NOT EXISTS confident_provenance_timeseries_index ON flags.confident_provenance USING HASH (timeseries);
