@@ -200,7 +200,7 @@ pub async fn insert_data(
         .prepare(
             "INSERT INTO flags.confident_provenance (timeseries, obstime, pipeline, flag, fail_condition) \
                 VALUES ($1, $2, $3, $4, $5) \
-                ON CONFLICT ON CONSTRAINT unique_confident_providence_timeseries_obstime_pipeline \
+                ON CONFLICT ON CONSTRAINT unique_confident_provenance_timeseries_obstime_pipeline \
                     DO UPDATE SET flag = EXCLUDED.flag, fail_condition = EXCLUDED.fail_condition",
         )
         .await?;
