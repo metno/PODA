@@ -326,7 +326,6 @@ pub async fn filter_and_label_kldata<'a>(
             chunk.type_id,
             param_id,
         )? {
-            // TODO: log that the timeseries is closed? Mostly useful for tests
             #[cfg(feature = "integration_tests")]
             eprintln!("station {}: timeseries is closed", chunk.station_id);
             continue;
@@ -340,7 +339,7 @@ pub async fn filter_and_label_kldata<'a>(
             .map(|both| (Some(both.0), Some(both.1)))
             .unwrap_or((None, None));
 
-        let obsinn_label_result = match transaction
+        let obsinn_label_result = transaction
             .query_opt(
                 &query_get_obsinn,
                 &[
@@ -351,18 +350,7 @@ pub async fn filter_and_label_kldata<'a>(
                     &sensor,
                 ],
             )
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                println!("query_opt: {}", e);
-                println!(
-                    "{} {} {} {:?} {:?}",
-                    chunk.station_id, chunk.type_id, in_datum.id.param_code, lvl, sensor
-                );
-                return Err(Error::Database(e));
-            }
-        };
+            .await?;
 
         let timeseries_id: i32 = match obsinn_label_result {
             Some(row) => row.get(0),
@@ -370,23 +358,16 @@ pub async fn filter_and_label_kldata<'a>(
                 // create new timeseries
                 // TODO: currently we create a timeseries with null location
                 // In the future the location column should be moved to the timeseries metadata table
-                let timeseries_id = match transaction
+                let timeseries_id = transaction
                     .query_one(
                         "INSERT INTO public.timeseries (fromtime) VALUES ($1) RETURNING id",
                         &[&in_datum.timestamp],
                     )
-                    .await
-                {
-                    Ok(v) => v,
-                    Err(e) => {
-                        println!("query_one: {}", e);
-                        return Err(Error::Database(e));
-                    }
-                }
-                .get(0);
+                    .await?
+                    .get(0);
 
                 // create obsinn label
-                if let Err(e) = transaction
+                match transaction
                     .execute(
                         "INSERT INTO labels.obsinn \
                                 (timeseries, nationalnummer, type_id, param_code, lvl, sensor) \
@@ -402,38 +383,50 @@ pub async fn filter_and_label_kldata<'a>(
                     )
                     .await
                 {
-                    println!("query_one: {}", e);
-                    return Err(Error::Database(e));
-                };
-
-                // create met label
-                if let Err(e) = transaction
-                    .execute(
-                        "INSERT INTO labels.met \
+                    Ok(_) => {
+                        // Unique constraint was not violated
+                        // create met label
+                        transaction
+                            .execute(
+                                "INSERT INTO labels.met \
                                 (timeseries, station_id, param_id, type_id, lvl, sensor) \
                             VALUES ($1, $2, $3, $4, $5, $6)",
-                        &[
-                            &timeseries_id,
-                            &chunk.station_id,
-                            &param_id,
-                            &chunk.type_id,
-                            &lvl,
-                            &sensor,
-                        ],
-                    )
-                    .await
-                {
-                    println!("transaction execute labels.met: {}", e);
-                    return Err(Error::Database(e));
-                };
+                                &[
+                                    &timeseries_id,
+                                    &chunk.station_id,
+                                    &param_id,
+                                    &chunk.type_id,
+                                    &lvl,
+                                    &sensor,
+                                ],
+                            )
+                            .await?;
 
-                timeseries_id
+                        transaction.commit().await?;
+
+                        timeseries_id
+                    }
+                    Err(_) => {
+                        // Unique constraint was violated
+                        // TODO: the explicit rollback should not be needed
+                        transaction.rollback().await?;
+
+                        conn.query_opt(
+                            &query_get_obsinn,
+                            &[
+                                &chunk.station_id,
+                                &chunk.type_id,
+                                &in_datum.id.param_code,
+                                &lvl,
+                                &sensor,
+                            ],
+                        )
+                        .await?
+                        .unwrap()
+                        .get(0)
+                    }
+                }
             }
-        };
-
-        if let Err(e) = transaction.commit().await {
-            println!("transaction commit: {}", e);
-            return Err(Error::Database(e));
         };
 
         data.push(Datum {
