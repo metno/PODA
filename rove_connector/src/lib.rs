@@ -91,6 +91,7 @@ fn regularize(
 }
 
 impl Connector {
+    // Needed for the trait, but not currently used in practice. fetch_context is used instead
     pub async fn fetch_one(
         &self,
         ts_id: i32,
@@ -164,6 +165,112 @@ impl Connector {
                 time_spec.time_resolution,
                 num_leading_points,
                 num_trailing_points,
+            )
+        };
+
+        Ok(cache)
+    }
+
+    // Like fetch one, but for when the current point isn't in the DB yet, so you pass it as an arg
+    // Not required (currently) for the trait, but helpful locally
+    // num_trailing points is disabled, as this is for fresh data, where trailing points shouldn't
+    // be available
+    // TODO: largely redundant with fetch_one. We should consolidate at some point, peraps using
+    // this function to evolve the trait?
+    pub async fn fetch_context(
+        &self,
+        ts_id: i32,
+        timestamp: DateTime<Utc>,
+        time_resolution: RelativeDuration,
+        num_leading_points: u8,
+        datum: Option<f32>,
+    ) -> Result<DataCache, data_switch::Error> {
+        if num_leading_points == 0 {
+            return Ok(DataCache::new(
+                vec![Timeseries {
+                    tag: ts_id.to_string(),
+                    values: vec![datum],
+                }],
+                // TODO: we need to either query to get the lat, lon, elev, or change olympian to
+                // accept not having them
+                vec![],
+                vec![],
+                vec![],
+                rove::data_switch::Timestamp(timestamp.timestamp()),
+                time_resolution,
+                num_leading_points,
+                0,
+            ));
+        }
+
+        // TODO: matching intervals like this is a hack, but currently necessary to avoid
+        // SQL injection. Ideally we could pass an interval type as a query param, which would
+        // also save us the query_string allocation, but no ToSql implementations for intervals
+        // currently exist in tokio_postgres, so we need to implement it ourselves.
+        let interval = match time_resolution {
+            x if x == RelativeDuration::minutes(1) => "1 minute",
+            x if x == RelativeDuration::hours(1) => "1 hour",
+            x if x == RelativeDuration::days(1) => "1 day",
+            _ => {
+                return Err(data_switch::Error::Other(Box::new(
+                    Error::UnhandledTimeResolution(time_resolution),
+                )))
+            }
+        };
+
+        let start_time = timestamp - (time_resolution * num_leading_points.into());
+        // exclude the current value
+        let end_time = timestamp - time_resolution;
+
+        let conn = self
+            .pool
+            .get()
+            .await
+            .map_err(|e| data_switch::Error::Other(Box::new(e)))?;
+
+        // TODO: should this contain an ORDER BY? Actually I think it's not necessary since the
+        // order is dictated by the generated sequence
+        // TODO: should we drop ts_rule.timestamp from the SELECT? we don't seem to use it
+        // TODO: should we make this like the fetch_all query and regularize outside the query?
+        // I think this query might perform badly because the join against the generated series
+        // doesn't use the index optimally. Doing this would also save us the "interval" mess
+        let data_results = conn
+            .query(
+                "
+                SELECT data.obsvalue, ts_rule.timestamp \
+                FROM ( \
+                    SELECT data.obsvalue, data.obstime \
+                    FROM data \
+                    WHERE data.timeseries = $1 \
+                ) as data \
+                RIGHT JOIN generate_series($2::timestamptz, $3::timestamptz, ($4::text)::interval) AS ts_rule(timestamp) \
+                    ON data.obstime = ts_rule.timestamp
+                ", &[&ts_id, &start_time, &end_time, &interval])
+            .await
+            .map_err(|e| data_switch::Error::Other(Box::new(e)))?;
+
+        let cache = {
+            let mut values = Vec::with_capacity(data_results.len() + 1);
+
+            for row in data_results {
+                values.push(row.get(0));
+            }
+            values.push(datum);
+
+            DataCache::new(
+                vec![Timeseries {
+                    tag: ts_id.to_string(),
+                    values,
+                }],
+                // TODO: we need to either query to get the lat, lon, elev, or change olympian to
+                // accept not having them
+                vec![],
+                vec![],
+                vec![],
+                rove::data_switch::Timestamp(timestamp.timestamp()),
+                time_resolution,
+                num_leading_points,
+                0,
             )
         };
 
