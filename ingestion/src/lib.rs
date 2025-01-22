@@ -268,7 +268,7 @@ pub async fn insert_data(
     Ok(())
 }
 
-pub async fn qc_data(
+pub async fn qc_fresh_data(
     chunks: &mut Vec<DataChunk<'_>>,
     rove_connector: &rove_connector::Connector,
     pipelines: &HashMap<(i32, RelativeDuration), rove::Pipeline>,
@@ -302,7 +302,9 @@ pub async fn qc_data(
             let rove_output = rove::Scheduler::schedule_tests(pipeline, data_cache)?;
 
             let first_fail = rove_output.iter().find(|check_result| {
+                // first here because there should only be one timeseries
                 if let Some(result) = check_result.results.first() {
+                    // first here because there should only be one qced datum in the timeseries
                     if let Some(flag) = result.values.first() {
                         return *flag == rove::Flag::Fail;
                     }
@@ -368,7 +370,7 @@ async fn handle_kldata(
                 .await?;
 
         // TODO: should we tolerate failure here? Perhaps there should be metric for this?
-        let provenance = qc_data(&mut data, &rove_connector, &qc_pipelines).await?;
+        let provenance = qc_fresh_data(&mut data, &rove_connector, &qc_pipelines).await?;
 
         insert_data(&data, &provenance, &mut conn).await?;
 
