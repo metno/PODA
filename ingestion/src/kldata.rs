@@ -291,8 +291,11 @@ pub async fn filter_and_label_kldata<'a>(
                     ))
                 })?;
 
-            // TODO: we only need to check inside this loop if station_id is in the
-            // param_permit_table
+            // TODO: With some changes to this function, we could potentially move its call outside
+            // the loop body. For one thing, the station permit checks, if done in a separate
+            // function, would apply to all observations. Since we know the param-specific permits
+            // are barely used, we could also pre-emptively check all param permits outside the
+            // loop.
             if !timeseries_is_open(
                 permit_table.clone(),
                 chunk.station_id,
