@@ -125,7 +125,7 @@ pub struct Datum<'a> {
     // needed for QC
     param_id: i32,
     value: ObsType<'a>,
-    qc_usable: Option<bool>,
+    qc_usable: bool,
 }
 
 /// Generic container for a piece of data ready to be inserted into the DB
@@ -317,7 +317,7 @@ pub async fn qc_fresh_data(
                 None => (0, None),
             };
 
-            datum.qc_usable = Some(flag == 0);
+            datum.qc_usable = flag == 0;
 
             qc_results.push(QcProvenance {
                 timeseries_id: datum.timeseries_id,
