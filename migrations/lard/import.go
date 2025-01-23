@@ -14,7 +14,7 @@ func InsertData(ts [][]any, pool *pgxpool.Pool, logStr string) (int64, error) {
 	count, err := pool.CopyFrom(
 		context.TODO(),
 		pgx.Identifier{"public", "data"},
-		[]string{"timeseries", "obstime", "obsvalue"},
+		[]string{"timeseries", "obstime", "obsvalue", "qc_usable"},
 		pgx.CopyFromRows(ts),
 	)
 	if err != nil {
@@ -35,7 +35,7 @@ func InsertTextData(ts [][]any, pool *pgxpool.Pool, logStr string) (int64, error
 	count, err := pool.CopyFrom(
 		context.TODO(),
 		pgx.Identifier{"public", "nonscalar_data"},
-		[]string{"timeseries", "obstime", "obsvalue"},
+		[]string{"timeseries", "obstime", "obsvalue", "qc_usable"},
 		pgx.CopyFromRows(ts),
 	)
 	if err != nil {

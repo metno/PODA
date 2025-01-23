@@ -48,11 +48,13 @@ func convert(obs *KdvhObs, ts *TsInfo) (lard.DataObs, lard.TextObs, lard.Flag, e
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Data:    valPtr,
+			QcUsable: true,
 		},
 		lard.TextObs{
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Text:    &obs.Data,
+			QcUsable: true,
 		},
 		lard.Flag{
 			Id:          ts.Id,
@@ -99,11 +101,13 @@ func convertEdata(obs *KdvhObs, ts *TsInfo) (lard.DataObs, lard.TextObs, lard.Fl
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Data:    valPtr,
+			QcUsable: true,
 		},
 		lard.TextObs{
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Text:    &obs.Data,
+			QcUsable: true,
 		},
 		lard.Flag{
 			Id:          ts.Id,
@@ -150,11 +154,13 @@ func convertPdata(obs *KdvhObs, ts *TsInfo) (lard.DataObs, lard.TextObs, lard.Fl
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Data:    valPtr,
+			QcUsable: true,
 		},
 		lard.TextObs{
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Text:    &obs.Data,
+			QcUsable: true,
 		},
 		lard.Flag{
 			Id:          ts.Id,
@@ -203,11 +209,13 @@ func convertNdata(obs *KdvhObs, ts *TsInfo) (lard.DataObs, lard.TextObs, lard.Fl
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Data:    valPtr,
+			QcUsable: true,
 		},
 		lard.TextObs{
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Text:    &obs.Data,
+			QcUsable: true,
 		},
 		lard.Flag{
 			Id:          ts.Id,
@@ -259,11 +267,13 @@ func convertVdata(obs *KdvhObs, ts *TsInfo) (lard.DataObs, lard.TextObs, lard.Fl
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Data:    valPtr,
+			QcUsable: true,
 		},
 		lard.TextObs{
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Text:    &obs.Data,
+			QcUsable: true,
 		},
 		lard.Flag{
 			Id:          ts.Id,
@@ -285,11 +295,13 @@ func convertDiurnalInterpolated(obs *KdvhObs, ts *TsInfo) (lard.DataObs, lard.Te
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Data:    valPtr,
+			QcUsable: true,
 		},
 		lard.TextObs{
 			Id:      ts.Id,
 			Obstime: obs.Obstime,
 			Text:    &obs.Data,
+			QcUsable: true,
 		},
 		lard.Flag{
 			Id:          ts.Id,
