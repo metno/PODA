@@ -387,7 +387,9 @@ pub async fn filter_and_label_kldata<'a>(
                 timeseries_id,
                 param_id: param.id,
                 value: in_datum.value,
-                qc_usable: None,
+                // default to true as this means no QC failure, this will be mutated later if a
+                // pipeline fails
+                qc_usable: true,
             });
         }
         out_chunks.push(DataChunk {

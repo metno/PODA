@@ -32,9 +32,12 @@ CREATE TABLE IF NOT EXISTS public.data (
     timeseries INT4 NOT NULL,
     obstime TIMESTAMPTZ NOT NULL,
     obsvalue REAL,
-    -- TODO: should qc_usable be NOT NULL? and default to true?
-    -- It would make greatly reduce the update load when QCing old data
-    qc_usable BOOLEAN,
+    -- This value should be treated as an absolute assertion of the data's quality but rather our
+    -- current knowlege of it. `true` here indicates that the datum has not failed any QC pipelines
+    -- (including if none have been run at all). Users that have specific requirements for what QC
+    -- has been performed on the data should refer to the information in the
+    -- `flags.confident_provenance` table.
+    qc_usable BOOLEAN NOT NULL,
     CONSTRAINT unique_data_timeseries_obstime UNIQUE (timeseries, obstime),
     CONSTRAINT fk_data_timeseries FOREIGN KEY (timeseries) REFERENCES public.timeseries
 ) PARTITION BY RANGE (obstime);
