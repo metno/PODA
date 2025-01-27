@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS public.data (
     -- (including if none have been run at all). Users that have specific requirements for what QC
     -- has been performed on the data should refer to the information in the
     -- `flags.confident_provenance` table.
-    qc_usable BOOLEAN NOT NULL,
+    qc_usable BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT unique_data_timeseries_obstime UNIQUE (timeseries, obstime),
     CONSTRAINT fk_data_timeseries FOREIGN KEY (timeseries) REFERENCES public.timeseries
 ) PARTITION BY RANGE (obstime);
