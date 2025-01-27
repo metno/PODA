@@ -12,13 +12,10 @@ type DataObs struct {
 	Obstime time.Time
 	// Observation data formatted as a single precision floating point number
 	Data *float32
-	// Indicator of QC status (true = no failures) always true for us as we don't QC in the
-	// migrations. Will be updated when it's QCed ata later date
-	QcUsable bool
 }
 
 func (o *DataObs) ToRow() []any {
-	return []any{o.Id, o.Obstime, o.Data, o.QcUsable}
+	return []any{o.Id, o.Obstime, o.Data}
 }
 
 // Struct mimicking the `public.nonscalar_data` table
@@ -29,13 +26,10 @@ type TextObs struct {
 	Obstime time.Time
 	// Observation data that cannot be represented as a float, therefore stored as a string
 	Text *string
-	// Indicator of QC status (true = no failures) always true for us as we don't QC in the
-	// migrations. Will be updated when it's QCed ata later date
-	QcUsable bool
 }
 
 func (o *TextObs) ToRow() []any {
-	return []any{o.Id, o.Obstime, o.Text, o.QcUsable}
+	return []any{o.Id, o.Obstime, o.Text}
 }
 
 // Struct mimicking the `flags.kvdata` table

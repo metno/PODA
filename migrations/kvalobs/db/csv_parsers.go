@@ -57,7 +57,6 @@ func parseDataCSV(tsid int32, rowCount int, timespan *utils.TimeSpan, scanner *b
 			Id:      tsid,
 			Obstime: obstime,
 			Data:    originalPtr,
-			QcUsable: true,
 		}
 
 		var cfailed *string
@@ -105,7 +104,6 @@ func parseTextCSV(tsid int32, rowCount int, timespan *utils.TimeSpan, scanner *b
 			Id:      tsid,
 			Obstime: obstime,
 			Text:    &fields[1],
-			QcUsable: true,
 		}
 
 		data = append(data, lardObs.ToRow())
@@ -146,7 +144,6 @@ func parseMetarCloudType(tsid int32, rowCount int, timespan *utils.TimeSpan, sca
 			Id:      tsid,
 			Obstime: obstime,
 			Data:    &original,
-			QcUsable: true,
 		}
 
 		data = append(data, lardObs.ToRow())
@@ -182,7 +179,6 @@ func parseSpecialCloudType(tsid int32, rowCount int, timespan *utils.TimeSpan, s
 			Id:      tsid,
 			Obstime: obstime,
 			Text:    &fields[1],
-			QcUsable: true,
 		}
 
 		data = append(data, lardObs.ToRow())
