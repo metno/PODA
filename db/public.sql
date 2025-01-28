@@ -32,10 +32,10 @@ CREATE TABLE IF NOT EXISTS public.data (
     timeseries INT4 NOT NULL,
     obstime TIMESTAMPTZ NOT NULL,
     obsvalue REAL,
-    -- This value should be treated as an absolute assertion of the data's quality but rather our
-    -- current knowlege of it. `true` here indicates that the datum has not failed any QC pipelines
-    -- (including if none have been run at all). Users that have specific requirements for what QC
-    -- has been performed on the data should refer to the information in the
+    -- This value should not be treated as an absolute assertion of the data's quality but rather
+    -- our current knowlege of it. `true` here indicates that the datum has not failed any QC
+    -- pipelines (including if none have been run at all). Users that have specific requirements
+    -- for what QC has been performed on the data should refer to the information in the
     -- `flags.confident_provenance` table.
     qc_usable BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT unique_data_timeseries_obstime UNIQUE (timeseries, obstime),
