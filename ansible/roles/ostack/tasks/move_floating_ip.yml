@@ -1,0 +1,18 @@
+---
+# Switch over the primary's particular floating ip
+# this makes sense to do after successfully switching over
+# TODO: make sure that the ingestor in the primary is robust enough to handle
+# getting told the db is in a read only state for a short period.
+- name: Detach floating ip address that we keep connected to the primary
+  openstack.cloud.floating_ip:
+    cloud: "{{ ostack_cloud }}"
+    region_name: "{{ ostack_region }}"
+    server: "{{ ostack_primary }}"
+    state: absent
+    network: public
+    floating_ip_address: "{{ ostack_floating_ip }}"
+  when: inventory_hostname == ostack_primary
+
+- name: Attach floating IP to the new primary
+  ansible.builtin.import_tasks: attach_floating_ip.yml
+  when: inventory_hostname == ostack_standby

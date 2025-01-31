@@ -1,20 +1,34 @@
-- name: setup networks and 2 vms
-  vars:
-    ostack_cloud: lard
-    ipalias_network_name: ipalias
-    ostack_region: Ostack2-EXT
+---
+- name: Preliminary setup
   hosts: localhost
   gather_facts: false
+  vars:
+    # set here or provide via cmd '-e ostack_key_name=... -e ostack_key_file=...'
+    ostack_key_name: # label for the key to set up on Ostack
+    ostack_key_file: # key file containing the your ssh key
+  tasks:
+    - name: Key pair
+      ansible.builtin.import_role:
+        name: ostack
+        tasks_from: keypair.yml
+      tags: addkey
 
-  roles:
-    - role: networks
-    - role: vm # in A
-      vars:
-        name_stuff: lard-a 
-        availability_zone: ext-a
-        vm_ip: '{{ hostvars[groups["servers"][0]].ansible_host }}'
-    - role: vm # in B
-      vars:
-        name_stuff: lard-b 
-        availability_zone: ext-b
-        vm_ip: '{{ hostvars[groups["servers"][1]].ansible_host }}'
+    - name: Project network
+      ansible.builtin.import_role:
+        name: ostack
+        tasks_from: network.yml
+      tags: network
+
+- name: Provision
+  hosts: servers
+  gather_facts: false
+  vars:
+    # set here or provide via cmd, '-e ostack_key_name=...'
+    ostack_key_name: # label for the key on Ostack to use to create the VMs
+  tasks:
+    - name: Create VMs
+      ansible.builtin.import_role:
+        name: ostack
+        tasks_from: create_vm.yml
+      delegate_to: localhost
+      tags: vm

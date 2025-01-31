@@ -1,35 +1,17 @@
-- name: Mount disks and install stuff on the VMs
+---
+- name: Configure VMs for replication
   hosts: servers
   remote_user: ubuntu
+  gather_facts: true
+  # TODO: it would be nice to have a host (dns?)
+  # that always points to the primary
   vars:
-    ostack_cloud: lard
-    ipalias_network_name: ipalias
-    ostack_region: Ostack2-EXT
-  # loops over both servers
-  pre_tasks:
-    - name: List ansible_hosts_all difference from ansible_host (aka the vm not currently being iterated on)
-      ansible.builtin.debug:
-        msg: "{{ (ansible_play_hosts_all | difference([inventory_hostname])) | first }}" 
+    primary: lard-a # or provide via cmd '-e primary=...'
+
   roles:
-    - role: addsshkeys   
-    - role: vm_format
-      vars:
-        name_stuff: '{{ inventory_hostname }}' # name of current vm for finding ipalias port
     - role: ssh
+    - role: pg
       vars:
-        vm_ip: '{{ ansible_host }}' # the current vm's ip
-
-- name: Setup primary and standby
-  vars:
-    ostack_cloud: lard
-    ostack_region: Ostack2-EXT
-  hosts: localhost
-  gather_facts: false
-
-  roles:     
-    - role: primarystandbysetup
-      vars:
-        primary_name: lard-a
-        primary_ip: '{{ hostvars[groups["servers"][0]].ansible_host }}' # the first one is a
-        standby_name: lard-b
-        standby_ip: '{{ hostvars[groups["servers"][1]].ansible_host }}' # the second one is b
+        pg_version: 17
+        pg_primary_ip: "{{ hostvars[primary].ansible_host }}"
+        pg_mount_point: "{{ ostack_mount_point }}"

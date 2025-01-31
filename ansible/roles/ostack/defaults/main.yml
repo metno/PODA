@@ -1,0 +1,37 @@
+---
+# PUBLIC VARS
+ostack_cloud: lard
+ostack_region: Ostack2-EXT
+
+# PRIVATE VARS
+ostack_key_name: # name of the user key
+ostack_key_file: # user's public ssh key file
+
+# network
+ostack_network_name:
+ostack_network_cidr:
+ostack_netword_dns: # dict[ostack_region -> list(ipv4)]
+ostack_network_security_groups:
+  - name:
+    rule:
+      subnet:
+      port:
+ostack_ipalias_network_cidr:
+
+# create_vm
+ostack_vm_image:
+ostack_vm_flavor:
+ostack_vm_security_groups:
+ostack_vm_volume_type:
+ostack_vm_volume_size:
+
+# format_vm
+ostack_mount_device:
+ostack_mount_point:
+
+# ip that is always associated with the primary VM
+ostack_floating_ip:
+
+# move_floating_ip
+ostack_primary:
+ostack_standby:

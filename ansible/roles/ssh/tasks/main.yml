@@ -1,3 +1,22 @@
-# roles/ssh/tasks/main.yml
-- name: Share the ssh keys one way between 2 particular VMs
-  import_tasks: share-ssh-keys.yml
+---
+# TODO: kinda useless, since this is done automatically when you gather_facts the first time
+- name: Add hostkey to localhost `known_hosts`
+  ansible.builtin.known_hosts:
+    name: "{{ ansible_host }}"
+    state: present
+    # NOTE: requires `gather_facts: true`
+    key: >
+      "{{ ansible_host }}" ecdsa-sha2-nistp256
+      "{{ ansible_ssh_host_key_ecdsa_public }}"
+    hash_host: true
+  delegate_to: localhost
+
+- name: Add users keys to authorized_keys
+  ansible.posix.authorized_key:
+    # username on the remotehost whose authorized keys are being modified
+    user: ubuntu
+    state: present
+    key: "{{ item.key }}"
+  loop: "{{ ssh_user_key_list }}"
+  loop_control:
+    label: "adding {{ item.name }} key to authorized_keys"

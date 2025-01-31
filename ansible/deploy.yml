@@ -1,7 +1,23 @@
 ---
-- name: Deploy binaries
-  # Deploy on both VMs, only the primary is "active"
+- name: Build LARD binary
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Build
+      ansible.builtin.command:
+        chdir: ..
+        cmd: cargo build --release --workspace --exclude lard_tests
+      register: output
+      changed_when: output.stderr_lines | length > 1
+
+- name: Deploy LARD binary
   hosts: servers
   remote_user: ubuntu
+  gather_facts: false
+  vars:
+    primary: lard-a # or provide via cmd
+
   roles:
     - role: deploy
+      vars:
+        deploy_primary: "{{ primary }}"

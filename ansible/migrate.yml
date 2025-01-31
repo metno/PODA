@@ -1,30 +1,17 @@
 ---
+# TODO: update this when we change file names in db directory
 - name: Perform DB migration
-  hosts: servers
+  # TODO: we should have a host that always points to the primary
+  hosts: "{{ primary }}"
   remote_user: ubuntu
   gather_facts: false
   vars:
-    primary: lard-a
+    primary: lard-a # or provide via cmd
 
   tasks:
-    - name: Copy the db folder to the remote
-      ansible.builtin.copy:
-        src: "{{ playbook_dir }}/../db/"
-        dest: /etc/postgresql/16/db/
-        mode: "0755"
-      become: true
-
-    - name: Migrate primary
-      when: inventory_hostname == primary
-      become: true
-      become_user: postgres
-      block:
-        - name: Update public schema in lard
-          community.postgresql.postgresql_script:
-            db: lard
-            path: /etc/postgresql/16/db/public.sql
-
-        - name: Create partition tables in lard
-          community.postgresql.postgresql_script:
-            db: lard
-            path: /etc/postgresql/16/db/partitions_generated.sql
+    - name: Copy and run
+      ansible.builtin.import_role:
+        name: pg
+        tasks_from: migration.yml
+      vars:
+        pg_mount_point: "{{ ostack_mount_point }}"

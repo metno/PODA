@@ -1,3 +1,0 @@
-# roles/movefloatingip/tasks/main.yml
-- name: Movefloatingip
-  import_tasks: movefloatingip.yml
