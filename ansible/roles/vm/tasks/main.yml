@@ -1,4 +1,0 @@
-# roles/vms/tasks/main.yml
-- name: Create a VM
-  import_tasks: create-project-vm.yml
-

@@ -1,0 +1,97 @@
+---
+- name: Add postgres apt key by id from a keyserver
+  ansible.builtin.apt_key:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    state: present
+  become: true
+
+- name: Add postgres repository into sources list
+  ansible.builtin.apt_repository:
+    repo: "deb https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    state: present
+  become: true
+
+- name: Install apt packages
+  ansible.builtin.apt:
+    pkg:
+      - nano
+      - postgresql-{{ pg_version }}
+      - postgresql-{{ pg_version }}-repmgr # https://www.repmgr.org/docs/current/install-requirements.html
+      - python3-venv
+      - python3-pip # needed for installing psycopg
+      - acl # needed for becoming unpriveleged user (such as postgres)
+    update_cache: true
+  become: true
+
+- name: Install pip packages
+  ansible.builtin.pip:
+    # NOTE: this is a "problem" in Ubuntu 24.04+ since they started applying PEP 668.
+    virtualenv: "{{ pg_venv }}"
+    virtualenv_command: " /usr/bin/python3 -m venv"
+    name:
+      - psycopg[binary] # dependency for ansible.community.postgresql
+      - openstacksdk
+
+# TODO: needed for rejoining, but maybe the symlink is a bit of a hack
+# multiple PG versions can be installed, but maybe we won't install multiple versions?
+# Or simply update the symlink on update
+- name: Create 'pg_rewind' symlink in /usr/local/bin
+  ansible.builtin.file:
+    src: "/usr/lib/postgresql/{{ pg_version }}/bin/pg_rewind"
+    dest: /usr/local/bin/pg_rewind
+    state: link
+  become: true
+
+# TODO: this should probably be done somewhere else?
+- name: Set venv interpreter
+  ansible.builtin.set_fact:
+    ansible_python_interpreter: "{{ pg_venv }}/bin/python3"
+
+# Make so the data is actually kept on the ssd mount
+# First stop postgres service
+- name: Stop service postgres, if running
+  ansible.builtin.systemd_service:
+    name: postgresql
+    state: stopped
+  become: true
+
+- name: Rsync postgres directory to ssd mount
+  ansible.posix.synchronize:
+    archive: true
+    src: /var/lib/postgresql
+    dest: "{{ pg_mount_point }}"
+  become: true
+  # synchronize runs by default on localhost
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: Change postgres data directory
+  ansible.builtin.replace:
+    dest: /etc/postgresql/{{ pg_version }}/main/postgresql.conf
+    regexp: '(data_directory\s=\s)\S+'
+    replace: "\\1'{{ pg_dir }}'"
+  become: true
+
+- name: Change postgres listen_addresses
+  ansible.builtin.replace:
+    dest: /etc/postgresql/{{ pg_version }}/main/postgresql.conf
+    regexp: '#(listen_addresses\s=\s)\S+'
+    replace: "\\1'*'"
+  become: true
+
+# probably want to restrict this once we know what will connect?
+# but the security group rules should take care of limiting to met ranges
+- name: Change hba conf to allow connections
+  community.postgresql.postgresql_pg_hba:
+    dest: /etc/postgresql/{{ pg_version }}/main/pg_hba.conf
+    contype: host
+    address: all # can we put met internal ip range(s)?
+    method: md5
+    # users and database default to all
+  become: true
+
+# make sure these changes take effect
+- name: Restart postgres service
+  ansible.builtin.systemd_service:
+    name: postgresql
+    state: restarted
+  become: true

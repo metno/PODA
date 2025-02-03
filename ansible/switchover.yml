@@ -1,19 +1,17 @@
+---
 - name: Switch the primary and standby / replica
-  hosts: localhost
-  vars:
-    ostack_cloud: lard
-    ostack_region: Ostack2-EXT
+  hosts: servers
   gather_facts: false
-  pre_tasks:
-    - name: find primary ip from inventory
-      ansible.builtin.set_fact:
-        primary_ip: '{{ item }}'
-      with_inventory_hostnames: '{{ name_primary }}'
-    - name: find standby ip from inventory
-      ansible.builtin.set_fact:
-        standby_ip: '{{ item }}'
-      with_inventory_hostnames: '{{ name_standby }}'
+  remote_user: ubuntu
+  # TODO: this can be probably done automatically if there are only two VMs?
+  # pre_tasks:
+  #   - name: Find server role
+  vars:
+    # provide via cmd '-e primary=... -e standby=...'
+    primary:
+    standby:
   roles:
-    # ensure the names are passed in the right way around for the current state!
-    - role: switchover 
-    - role: movefloatingip
+    - role: switchover
+      vars:
+        switchover_primary: "{{ primary }}"
+        switchover_standby: "{{ standby }}"
